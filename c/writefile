@@ -148,6 +148,7 @@ static void strings(void) {
   outstring(opt.help);
   fprintf(file, "\n");
   if (opt.mfile) {
+    fprintf(file, "\tALIGN\n");
     fprintf(file, "_CMUNGE_message_file\n");
     fprintf(file, "\t= ");
     outstring(opt.mfile);
