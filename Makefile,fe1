@@ -1,0 +1,134 @@
+# Project:   Generic Makefile
+
+
+# Toolflags:
+
+INCLUDE = C:,@.
+
+CCflags = -c -depend !Depend -I$(INCLUDE) -throwback
+CCflagsM = -c -g -depend !Depend -I$(INCLUDE) -throwback
+
+WIPE = wipe
+WIPEFLAGS = F~C~R~V
+
+CDIR = c
+ODIR = o
+HDIR = h
+C++flags = -c -g -depend !Depend -I$(INCLUDE) -throwback
+LinkflagsD = -aif -d -c++ -o $@
+Linkflags = -aif -c++ -o $@
+PartLinkflags = -aof -c++ -o $@
+
+#ObjAsmflags = -g -throwback -NoCache -depend !Depend
+ObjAsmflags = -throwback -NoCache -depend !Depend
+
+CMHGflags =
+LibFileflags = -c -o $@
+Squeezeflags = -o $@
+
+.SUFFIXES:	.o .om .oh .oz .c .s .l .y
+
+.c.o:;  cc $(CCflags) -o $@ $<
+.s.o:;  OBjasm $(ObjAsmFlags) -o $@ $<
+
+.c.om:;	MemCheck.CC cc $(ccflagsM) -o $@ $<
+.c.oh:;	cc $(ccflagsH) -o $@ $<
+.c.oz:;	cc $(ccflagsZ) -o $@ $<
+
+.y.c:; bison -o$@ $<
+
+.l.c:; flex -o$@ $<
+
+OS_FILES =
+
+OC_FILES = \
+	@.o.assemble	\
+	@.o.datestamp	\
+	@.o.error	\
+	@.o.main	\
+	@.o.mem		\
+	@.o.options	\
+	@.o.readfile	\
+	@.o.str		\
+	@.o.throwback	\
+	@.o.writeheader	\
+	@.o.writefile   \
+	@.o.blank
+
+OMC_FILES = \
+	@.om.assemble	\
+	@.om.datestamp	\
+	@.om.error	\
+	@.om.main	\
+	@.om.mem	\
+	@.om.options	\
+	@.om.readfile	\
+	@.om.str	\
+	@.om.throwback	\
+	@.om.writeheader	\
+	@.om.writefile	\
+	@.om.blank
+
+LIBS = C:o.stubs
+
+# Final targets:
+Most: @.^.cmunge
+
+All: @.^.cmunge @.cmungeM
+
+Examples: @.^.cmunge
+        -@.^.examples.!Make
+        Dir @.^.src
+
+@.^.cmunge: @.cmungeU
+	Squeeze @.cmungeU @.^.cmunge
+
+@.cmungeU: $(OC_FILES) $(OS_FILES)
+	link $(linkflags) $(OC_FILES) $(OS_FILES) $(LIBS) \
+
+@.cmungeM: $(OMC_FILES) $(OS_FILES)
+	link $(linkflagsD) $(OMC_FILES) $(OS_FILES) $(LIBS) \
+	MemCheck:o.MC
+
+clean:
+	remove @.cmungeU
+	remove @.cmungeM
+	-wipe @.o.* ~C ~V R F
+	-wipe @.om.* ~C ~V R F
+
+release: @.^.cmunge
+        @echo Source release
+        cdir @.^.ReleaseSrc
+        wipe @.^.ReleaseSrc ~C~VR
+        cdir @.^.ReleaseSrc
+        cdir @.^.ReleaseSrc.Examples
+        cdir @.^.ReleaseSrc.Examples.cmhg
+        cdir @.^.ReleaseSrc.Examples.h
+        cdir @.^.ReleaseSrc.Examples.hdr
+        cdir @.^.ReleaseSrc.Examples.inc
+        cdir @.^.ReleaseSrc.Examples.o
+        cdir @.^.ReleaseSrc.Examples.s
+        copy @.^.Docs          @.^.ReleaseSrc.Docs ~C~VR
+        copy @.^.Examples.!*   @.^.ReleaseSrc.Examples.* ~C~VR
+        copy @.^.Examples.inc  @.^.ReleaseSrc.Examples.inc ~C~VR
+        copy @.^.Examples.cmhg @.^.ReleaseSrc.Examples.cmhg ~C~VR
+        copy @.^.Src           @.^.ReleaseSrc.Src ~C~VR
+        -wipe @.^.ReleaseSrc.Src.o.* ~C~VR
+        -wipe @.^.ReleaseSrc.Src.om.* ~C~VR
+        remove @.^.ReleaseSrc.Src.cmungeU
+        copy @.^.cmunge        @.^.ReleaseSrc.cmunge ~C~VR
+        @echo Binary release
+        cdir @.^.ReleaseBin
+        wipe @.^.ReleaseBin ~C~VR
+        cdir @.^.ReleaseBin
+        copy @.^.Docs          @.^.ReleaseBin.Docs ~C~VR
+        copy @.^.cmunge        @.^.ReleaseBin.cmunge ~C~VR
+        dir ^
+        zip -r -9 BinCMunge/zip ReleaseBin
+        zip -r -9 SrcCMunge/zip ReleaseSrc
+
+# User-editable dependencies:
+
+# Static dependencies:
+
+# Dynamic dependencies:

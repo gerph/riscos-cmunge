@@ -1,0 +1,44 @@
+/*
+ * Copyright (C) 1999 Robin Watts/Justin Fletcher
+ */
+
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include "options.h"
+#include "throwback.h"
+
+void ErrorFatal(char *err, ...) {
+
+  va_list args;
+
+  va_start(args, err);
+  fprintf(stderr, "Serious Error: ");
+  vfprintf(stderr, err, args);
+  va_end(args);
+  fprintf(stderr, "\n               at %s, line %i\n",opt.infile,opt.atline);
+  if (opt.throwback)
+  {
+    va_start(args, err);
+    vThrowbackf(s_seriouserror,opt.infile,opt.atline,err,args);
+    va_end(args);
+  }
+  exit(EXIT_FAILURE);
+}
+
+void Warning(char *err, ...) {
+
+  va_list args;
+
+  va_start(args, err);
+  fprintf(stderr, "Warning: ");
+  vfprintf(stderr, err, args);
+  va_end(args);
+  fprintf(stderr, "\n");
+  if (opt.throwback)
+  {
+    va_start(args, err);
+    vThrowbackf(s_warning,opt.infile,opt.atline,err,args);
+    va_end(args);
+  }
+}

@@ -1,0 +1,12 @@
+/*
+ * Copyright (C) 1999 Robin Watts/Justin Fletcher
+ */
+
+#ifndef WRITEHEADER_H
+
+#define WRITEHEADER_H
+
+void WriteHeader(void);
+void WriteAsmHeader(void);
+
+#endif

@@ -1,0 +1,295 @@
+/*
+ * Copyright (C) 1999 Robin Watts/Justin Fletcher
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "error.h"
+#include "options.h"
+#include "str.h"
+#include "mem.h"
+
+/* Instantiate the global options struct here */
+options opt;
+
+/* Ensure that we remove our temporary file on exit */
+static void Options_RemoveFiles(void) {
+  if (opt.sfile && opt.stemp)
+    remove(opt.sfile);
+  if (opt.pfile)
+    remove(opt.pfile);
+}
+
+void Options_Init() {
+
+  opt.runnable    = 0;
+  opt.reentrant   = 1;
+  opt.service     = NULL;
+  opt.services    = NULL;
+  opt.title       = NULL;
+  opt.help        = NULL;
+  opt.helpfn      = NULL;
+  opt.commands    = NULL;
+  opt.swi_base    = 0;
+  opt.swi_handler = NULL;
+  opt.swi_names   = NULL;
+  opt.swi_decoder = NULL;
+  opt.irqs        = NULL;
+  opt.events      = NULL;
+  opt.event_nums  = NULL;
+  opt.init        = NULL;
+  opt.final       = NULL;
+  opt.lib_init    = NULL;
+  opt.generics    = NULL;
+  opt.vectors     = NULL;
+  opt.ofile       = NULL;
+  opt.sfile       = NULL;
+  opt.pfile       = NULL;
+  opt.hfile       = NULL;
+  opt.hdrfile     = NULL;
+  opt.throwback   = 0;
+  opt.infile      = NULL;
+  opt.atline      = 0;
+  opt.defines     = NULL;
+  opt.version     = 0;
+  opt.date        = NULL;
+  opt.oslib       = 0;
+  opt.mfile       = NULL;
+  opt.dfile       = NULL;
+  opt.includes    = NULL;
+  opt.base        = 0;
+  opt.datestring  = NULL;
+}
+
+static void help_text(void) {
+
+  printf("\
+\n\
+Make a RISC OS module header for a module written in C.\n\
+\n\
+Usage: cmunge [options] infile\n\
+\n\
+Options:\n\
+\n\
+-h              Output this information.\n\
+-o <file>       Name the output AOF file.\n\
+-s <file>       Name the output assembler file.\n\
+-d <file>       Name a C header file that CMunge will generate.\n\
+-hdr <file>     Name a Assembler header file that CMunge will generate.\n\
+-p              Pre-process the file with cpp before parsing.\n\
+-I<directory>   Include <directory> on the #include search path.\n\
+-D<symbol>=<value>\n\
+-D<symbol>      Define <symbol> on entry to the preprocessor.\n\
+-U<symbol>      Undefine <symbol> on entry to the preprocessor.\n\
+-depend <file>  Output 'make' include file dependency information to <file>.\n\
+-throwback      Use throwback for error processing.\n\
+-zbase          Define symbol Image__RO_Base in generated header.\n\
+-zoslib         Use '#include \"os.h\"' (OSLib) instead of '#include \"kernel.h\"'\n\
+                (Acorn) in generated C header file.\n\
+-blank          Generate a blank cmhg file to infile.\n\
+");
+}
+
+void Options_CL(int argc, char *argv[]) {
+
+  int i;
+  defines_list define;
+  include_list inc, *inc_tail;
+  char *arg;
+  char *val;
+
+  inc_tail = &opt.includes;
+  for (i = 1; i < argc; i++) {
+    if (strncasecmp("-throwback", argv[i])) {
+      opt.throwback=1;
+    } else if (strncasecmp("-hdr", argv[i])) { /* Must come first */
+      if (opt.hdrfile) {
+        ErrorFatal("-hdr flag used twice!");
+      }
+      i++;
+      if (i < argc) {
+        opt.hdrfile = strdup(argv[i]);
+      } else {
+        ErrorFatal("No filename passed with -hdr flag!");
+      }
+    } else if (strncasecmp("-h", argv[i])) {
+      help_text();
+      exit(EXIT_FAILURE);
+    } else if (strncasecmp("-p", argv[i])) {
+      if (opt.pfile) {
+        ErrorFatal("-p flag used twice!");
+      }
+      opt.pfile=strdup(tmpnam(NULL));
+    } else if (strncasecmp("-s", argv[i])) {
+      if (opt.sfile) {
+        ErrorFatal("-s flag used twice!");
+      }
+      i++;
+      if (i < argc) {
+        opt.sfile = strdup(argv[i]);
+      } else {
+        ErrorFatal("No filename passed with -s flag!");
+      }
+    } else if (strncasecmp("-o", argv[i])) {
+      if (opt.ofile) {
+        ErrorFatal("-o flag used twice!");
+      }
+      i++;
+      if (i < argc) {
+        opt.ofile = strdup(argv[i]);
+      } else {
+        ErrorFatal("No filename passed with -o flag!");
+      }
+    } else if (strncasecmp("-depend", argv[i])) {
+      if (opt.dfile) {
+        ErrorFatal("-depend flag used twice!");
+      }
+      i++;
+      if (i < argc) {
+        opt.dfile = strdup(argv[i]);
+      } else {
+        ErrorFatal("No filename passed with -depend flag!");
+      }
+    } else if (strncmp("-I", argv[i], 2) == 0) {
+      /* Includes must go in in order! */
+      arg = &argv[i][2];
+      if (*arg) {
+        inc = Malloc(sizeof(*inc));
+        inc->path = strdup(arg);
+        inc->next = NULL;
+        *inc_tail = inc;
+        inc_tail  = &inc->next;
+      } else {
+        ErrorFatal("No path passed with -I flag!");
+      }
+    } else if (strncmp("-D", argv[i], 2)==0) { /* case sensitive */
+      arg = &argv[i][2];
+      if (*arg == 0) {
+        i++;
+        if (i < argc) {
+          arg = argv[i];
+        } else {
+          ErrorFatal("No definition variable given with -D");
+        }
+      }
+      arg = strdup(arg);
+      val = strchr(arg,'=');
+      if (val != NULL)
+        *val++ = 0;
+
+      define         = Malloc(sizeof(*define));
+      define->name   = arg;
+      define->value  = val;
+      define->invert = 0;
+      define->next   = opt.defines;
+      opt.defines    = define;
+    } else if (strncmp("-U", argv[i], 2)==0) { /* case insensitive */
+      arg = &argv[i][2];
+      if (*arg == 0) {
+        i++;
+        if (i < argc) {
+          arg = argv[i];
+        } else {
+          ErrorFatal("No (un)definition variable given with -U");
+        }
+      }
+      arg = strdup(arg);
+      val = strchr(arg, '=');
+      if (val != NULL) {
+        ErrorFatal("How can you undefine something to be something? %s", arg);
+      }
+
+      define         = Malloc(sizeof(*define));
+      define->name   = arg;
+      define->value  = NULL;
+      define->invert = 1;
+      define->next   = opt.defines;
+      opt.defines    = define;
+    } else if (strcmp("-d", argv[i]) == 0) {
+      if (opt.hfile) {
+        ErrorFatal("-d flag used twice!");
+      }
+      i++;
+      if (i < argc) {
+        opt.hfile = strdup(argv[i]);
+      } else {
+        ErrorFatal("No filename passed with -d flag!");
+      }
+    } else if (strncasecmp("-blank", argv[i])) {
+      opt.blank=1;
+    } else if (strncmp("-z", argv[i], sizeof("-z")-1)==0) { /* case sensitive */
+      arg = &argv[i][sizeof("-z")-1];
+      if (strncasecmp("oslib", arg)) {
+        opt.oslib = 1;
+      } else if (strncasecmp("base", arg)) {
+        opt.base = 1;
+      } else {
+        ErrorFatal("Unknown tweak option -z");
+      }
+    } else {
+      if (opt.infile) {
+        ErrorFatal("Unknown flag/Only specify one input file: %s", argv[i]);
+      }
+      opt.infile = strdup(argv[i]);
+    }
+  }
+}
+
+void Options_CheckSanity(void) {
+
+  int needremoval=0;
+
+  if (opt.infile == NULL)
+  {
+    if (opt.blank)
+      ErrorFatal("No blank template file specified!");
+    else
+      ErrorFatal("No input file specified!");
+  }
+  if (!opt.blank)
+  {
+    if ((opt.ofile == NULL) && (opt.sfile == NULL) && (opt.hfile == NULL))
+      ErrorFatal("No output file specified!");
+  }
+  else
+  {
+    if (! ((opt.ofile == NULL) && (opt.sfile == NULL) && (opt.hfile == NULL)))
+      ErrorFatal("Output files specified with blank template!");
+  }
+  /* We need a temporary file for the assembler */
+  if (opt.sfile==NULL) {
+    opt.stemp=1;
+    opt.sfile=strdup(tmpnam(NULL));
+    needremoval=1;
+  }
+  if (opt.pfile!=NULL) {
+    needremoval=1;
+  }
+  if (needremoval)
+    atexit(Options_RemoveFiles);
+}
+
+void Options_CheckSanityPostRead(void) {
+
+  if (!opt.help)
+    ErrorFatal("No help-string specified!");
+  if (!opt.title)
+    ErrorFatal("No title-string specified!");
+
+  if (opt.swi_base == 0) {
+    if (opt.swi_handler)
+      ErrorFatal("SWI handler defined, but no SWI chunk!");
+    if (opt.swi_names)
+      ErrorFatal("SWI names defined, but no SWI chunk!");
+    if (opt.swi_decoder)
+      ErrorFatal("SWI decoder defined, but no SWI chunk!");
+  } else {
+    if (!opt.swi_handler && !opt.swi_special)
+      ErrorFatal("SWI chunk defined, but no SWI handler!");
+  }
+
+  if (opt.errors && opt.error_base == 0)
+    ErrorFatal("Errors defined, but no error base");
+}

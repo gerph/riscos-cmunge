@@ -1,0 +1,67 @@
+/*
+ * Copyright (C) 1999 Robin Watts/Justin Fletcher
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <string.h>
+
+#include "kernel.h"
+
+#include "datestamp.h"
+#include "error.h"
+#include "mem.h"
+#include "options.h"
+
+typedef enum {
+  objasm, as, failed
+} stage_t;
+
+static char buf[2048];
+
+void AssembleFile(void) {
+
+  int rc;
+
+  if (opt.ofile) {
+    stage_t stage = objasm;
+    while (stage!=failed)
+    {
+      switch (stage)
+      {
+        case objasm:
+          sprintf(buf, "objasm -nowarn %s %s -o %s",
+                                opt.throwback ? "-throwback " : "",
+                                opt.sfile, opt.ofile);
+          break;
+        case as:
+          sprintf(buf, "as -gcc %s %s -o %s",
+                                opt.throwback ? "-throwback " : "",
+                                opt.sfile, opt.ofile);
+          break;
+      }
+
+      rc = system(buf);
+      switch (rc) {
+        case EXIT_SUCCESS:
+          /* Yo, success! print a message ? Nah, just return */
+          return;
+
+        case -2:
+          /* Erm... not enough memory... or not there... or something... */
+          /* Try the next one along */
+          stage=(stage_t)((int)stage+1); /* Ok, so we're incrementing an enum... pah! */
+          break;
+
+        default:
+          /* They returned something icky. Obviously that's a fault; they
+             should have already displayed an error as to the fault though.
+           */
+          exit(rc);
+      }
+    }
+    if (stage==failed)
+      ErrorFatal("Unable to spawn assembler");
+  }
+}

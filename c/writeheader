@@ -1,0 +1,464 @@
+/*
+ * Copyright (C) 1999 Robin Watts/Justin Fletcher
+ */
+
+#include <stdio.h>
+#include <string.h>
+
+#include "error.h"
+#include "options.h"
+
+static FILE *file;
+
+static const char *error;
+static const char *regs;
+
+static void mainp(void) {
+
+  fprintf(file, "/* Function to be called when module is run */\n");
+  fprintf(file, "int main(int argc, char *argv[]);\n\n");
+}
+
+static void init(void) {
+
+  fprintf(file, "/* Function called on initialisation */\n");
+  fprintf(file, "%s *%s(const char *tail, int podule_base, void *pw);\n", error, opt.init);
+  fprintf(file, "\
+/*\n\
+ * On Entry: tail        = pointer to command tail (ctrl terminated!)\n\
+ *           podule_base = address of podule module was launched from,\n\
+ *                         or 0 if none\n\
+ *           pw          = private word of module\n\
+ * On Exit:  Return 0 for successful initialisation, or a pointer\n\
+ *           to an error block.\n\
+ */\n\
+\n");
+}
+
+static void fin(void) {
+
+  fprintf(file, "/* Function called on finalisation */\n");
+  fprintf(file, "%s *%s(int fatal, int podule_base, void *pw);\n", error, opt.final);
+  fprintf(file, "\
+/*\n\
+ * On Entry: fatal       = fatality indicator\n\
+ *           podule_base = address of podule module was launched from,\n\
+ *                         or 0 if none\n\
+ *           pw          = private word of module\n\
+ * On Exit:  Return 0 for successful finalisation, or a pointer\n\
+ *           to an error block.\n\
+ */\n\
+\n");
+}
+
+static void service(void) {
+
+  fprintf(file, "/* Function called to handle service calls */\n");
+  fprintf(file, "void %s(int service, %s *r, void *pw);\n", opt.service, regs);
+  fprintf(file, "\
+/*\n\
+ * On Entry: service = service call number\n\
+ *           r       = register values on entry\n\
+ *           pw      = private word of module\n\
+ * On Exit: Update register values on return by updating r\n\
+ */\n\
+\n");
+}
+
+static void commands(void) {
+
+  help_list l;
+  int n;
+
+  fprintf(file, "/* Function called to handle star commands and help requests */\n");
+  fprintf(file, "%s *%s(const char *arg_string, int argc, int number, void *pw);\n", error, opt.helpfn);
+  fprintf(file, "\
+/*\n\
+ * On Entry: number     = the number of the command/help entry\n\
+ *           argc       = number of arguments\n\
+ *           arg_string = argument string or output buffer\n\
+ *           pw         = module private word\n\
+ * On Exit: If number indicates a help entry:\n\
+ *            To output, assemble zero terminated output into arg_string,\n\
+ *            and return help_PRINT_BUFFER to print it. To stay silent,\n\
+ *            return NULL, and to given an error, return an error pointer.\n\
+ *            [In this case, you need to cast the 'const' away!]\n\
+ *          If number indicates a configure option:\n\
+ *            If arg_string is arg_STATUS, then print status, otherwise use\n\
+ *            argc and arg_string to set option. Return NULL for no error,\n\
+ *            one of the four error codes below, or an error pointer.\n\
+ *          If number indicates a command entry:\n\
+ *            Execute the command given by arg_string and argv.\n\
+ *            return NULL on sucess, pointer to error block on failure\n\
+ */\n\
+\n");
+
+  fprintf(file, "#define help_PRINT_BUFFER\t\t((%s *) arg_string)\n", error);
+  fprintf(file, "#define arg_CONFIGURE_SYNTAX\t\t((char *) 0)\n");
+  fprintf(file, "#define arg_STATUS\t\t\t((char *) 1)\n");
+  fprintf(file, "#define configure_BAD_OPTION\t\t((%s *) -1)\n", error);
+  fprintf(file, "#define configure_NUMBER_NEEDED\t\t((%s *) 1)\n", error);
+  fprintf(file, "#define configure_TOO_LARGE\t\t((%s *) 2)\n", error);
+  fprintf(file, "#define configure_TOO_MANY_PARAMS\t((%s *) 3)\n\n", error);
+  l = opt.commands;
+  n = 0;
+  while (l) {
+    fprintf(file, "#undef CMD_%s\n", l->name);
+    fprintf(file, "#define CMD_%s (%d)\n", l->name, n);
+    n++;
+    l=l->next;
+  }
+  fprintf(file, "\n");
+}
+
+static void hdr_swis(void) {
+
+  swi_list l;
+  char *prefix=opt.swi_names->name;
+  int swi=opt.swi_base;
+
+  /* Non-X variants */
+  l = opt.swi_names;
+  if (l)
+    l = l->next;
+
+  fprintf(file, "; SWI numbers\n");
+  {
+    int len=0;
+    while (len++<24) fputc(' ',file);
+    fprintf(file, "^ &%08x\n",swi);
+  }
+
+  while (l) {
+    char *name=l->name;
+    int startlen,len;
+    startlen=len=strlen(prefix)+1+strlen(name)+1;
+    fprintf(file, "%s_%s ", prefix, name);
+    while (len++<24) fputc(' ',file);
+    fprintf(file, "# 1\n");
+    swi++;
+    l=l->next;
+  }
+
+  /* X variants */
+  l = opt.swi_names;
+  if (l)
+    l = l->next;
+
+  {
+    int len=0;
+    while (len++<24) fputc(' ',file);
+    fprintf(file, "^ &%08x\n",swi+(1<<17));
+  }
+
+  while (l) {
+    char *name=l->name;
+    int startlen,len;
+    startlen=len=1+strlen(prefix)+1+strlen(name)+1;
+    fprintf(file, "X%s_%s ", prefix, name);
+    while (len++<24) fputc(' ',file);
+    fprintf(file, "# 1\n");
+    swi++;
+    l=l->next;
+  }
+
+}
+
+static void swi_handler(void) {
+
+  swi_list l;
+  char *prefix=opt.swi_names->name;
+  int swi=opt.swi_base;
+
+  if (opt.swi_handler)
+  {
+    fprintf(file, "/* Function called to handle SWI commands */\n");
+    fprintf(file, "%s *%s(int number, %s *r, void *pw);\n", error, opt.swi_handler, regs);
+  }
+  if (opt.swi_special)
+  {
+    l=opt.swi_names->next; /* Must be valid to get to here */
+    fprintf(file, "/* Functions called to handle particular SWI commands */\n");
+    while (l)
+    {
+      if (l->handler)
+        fprintf(file, "%s *%s(int number, %s *r, void *pw);\n", error, l->handler, regs);
+      l=l->next;
+    }
+  }
+  fprintf(file, "\
+/*\n\
+ * On Entry: number = SWI number within SWI chunk (i.e. 0 to 63)\n\
+ *           r      = registers (r0-r9) on entry\n\
+ *           pw     = module private word\n\
+ * On Exit:  Return NULL if SWI handled sucessfully, setting return register\n\
+ *           values (r0-r9) in r. Return error_BAD_SWI for out of range SWIs,\n\
+ *           or and error block otherwise.\n\
+ */\n\
+\n");
+
+
+  fprintf(file, "#define %s_00 (0x%08x)\n", prefix, swi);
+
+  l = opt.swi_names;
+  if (l)
+    l = l->next;
+  while (l) {
+    char *name=l->name;
+    int startlen,len;
+    startlen=len=strlen(prefix)+1+strlen(name);
+    fprintf(file, "#undef %s_%s\n", prefix, name);
+    fprintf(file, "#undef X%s_%s\n", prefix, name);
+    fprintf(file, "#define %s_%s  ", prefix, name);
+    while (len++<24) fputc(' ',file);
+    fprintf(file,"(0x%08x)\n", swi);
+    fprintf(file, "#define X%s_%s ", prefix, name);
+    while (startlen++<24) fputc(' ',file);
+    fprintf(file,"(0x%08x)\n", swi+(1<<17));
+    swi++;
+    l=l->next;
+  }
+  fprintf(file, "\n");
+  fprintf(file, "#define error_BAD_SWI ((%s *) -1)\n", error);
+  fprintf(file, "\n");
+}
+
+static void swi_decoder(void) {
+
+  if (opt.swi_decoder->handler) {
+    fprintf(file, "/* Function called to decode SWI names to numbers */\n");
+    fprintf(file, "int %s(const char *string, void *pw);\n", opt.swi_decoder->name);
+    fprintf(file, "\
+/*\n\
+ * On Entry: string = string to decode (control char terminated)\n\
+ *           pw     = module private word\n\
+ * On Exit:  If you recognise the string, return the offset within\n\
+ *           the SWI chunk (i.e. 0..63), otherwise return < 0\n\
+ */\n\
+\n");
+
+    fprintf(file, "/* Function called to decode SWI numbers to names */\n");
+    fprintf(file, "int %s(int number, char *buffer, int offset, int end, void *pw);\n", opt.swi_decoder->handler);
+    fprintf(file, "\
+/*\n\
+ * On Entry: number = offset within SWI chunk (0..63)\n\
+ *           buffer = pointer to output buffer\n\
+ *           offset = offset within buffer to start filling\n\
+ *           end    = pointer to character after the end of the buffer\n\
+ *           pw     = module private word\n\
+ * On Exit:  If the SWI number is recognised, write the SWI name into\n\
+ *           the buffer at the correct offset. Don't terminate string.\n\
+ *           Return offset to next free char. If the SWI is unrecognised,\n\
+ *           return offset unchanged.\n\
+ */\n\
+\n");
+
+  } else {
+    fprintf(file, "/* Function called to decode SWI number/strings */\n");
+    fprintf(file, "void %s(int r[4], void *pw);\n", opt.swi_decoder);
+    fprintf(file, "\
+/*\n\
+ * On Entry: If r[0] < 0 then r[1] points to a control terminatated string\n\
+ *             convert to a number. If you recognise the name, set r[0] to\n\
+ *             the offset within the block. If not, set r[0] < 0.\n\
+ *           otherwise: r[0] = offset within the SWI block\n\
+ *                      r[1] = pointer to an output buffer\n\
+ *                      r[2] = offset within buffer to fill from\n\
+ *                      r[3] = pointer to byte beyond the end of the buffer\n\
+ *             Either fill the buffer from the required point (updating\n\
+ *             r[2], without a terminator), and return NULL or return an\n\
+ *             error pointer.\n\
+ *           pw = private word of module\n\
+ */\n\
+\n");
+  }
+}
+
+static void event_handler(void) {
+
+  fprintf(file, "/* Symbol for entry point to module; not a C function! */\n");
+  fprintf(file, "extern void %s(void);\n", opt.events->name);
+  fprintf(file, "\
+/*\n\
+ * This name should be used as an argument to OS_Claim/OS_Release\n\
+ * as required, but should never be called from C.\n\
+ */\n\
+\n");
+
+  fprintf(file, "/* Function called to handle events */\n");
+  if (opt.events->handler)
+    fprintf(file, "int %s(%s *r, void *pw);\n", opt.events->handler, regs);
+  else
+    fprintf(file, "int %s_handler(%s *r, void *pw);\n", opt.events->name, regs);
+  fprintf(file, "\
+/*\n\
+ * On Entry: r  = registers on entry (r0-r9)\n\
+ *           pw = module private word\n\
+ * On Exit:  Return 0 to claim event, non-0 to pass on\n\
+ *           Update r to alter return values\n\
+ */\n\
+\n");
+
+}
+
+static void handlers(handler_list h, const char *type) {
+
+  while (h) {
+    fprintf(file, "/* Symbol for entry point to module; never call this! */\n");
+    fprintf(file, "extern void *%s;\n", h->name);
+    fprintf(file, "\
+/*\n\
+ * This name should be used as an argument to OS_Claim/OS_Release\n\
+ * as required, but should never be called from C.\n\
+ */\n\
+\n");
+
+    fprintf(file, "/* %s handler function */\n", type);
+    if (h->handler)
+      fprintf(file, "int %s(%s *r, void *pw);\n", h->handler, regs);
+    else
+      fprintf(file, "int %s_handler(%s *r, void *pw);\n", h->name, regs);
+    fprintf(file, "\
+/*\n\
+ * On Entry: r  = registers on entry (r0-r9)\n\
+ *           pw = module private word\n\
+ * On Exit:  Return 0 to claim, non-0 to pass on\n\
+ *           Update r to alter return values\n\
+ */\n\
+\n");
+    h = h->next;
+  }
+}
+
+static void errors(void) {
+
+  int errnum=opt.error_base;
+
+  fprintf(file, "/* Errors use a set base */\n");
+  fprintf(file, "#define ERROR_BASE (0x%08x)\n", opt.error_base);
+
+  if (opt.errors)
+  {
+    error_list l=opt.errors;
+    /* This is very icky, and nasty, and horrid, BUT it's the only way I can
+       see to do it */
+    fprintf(file,"\
+/* Error messages embedded in header, based at &%x */\n",errnum);
+    while (l)
+    {
+      fprintf(file,"extern void __err_%s(void); /* &%x */\n",l->name,errnum++);
+      l = l->next;
+    }
+    l=opt.errors;
+    while (l)
+    {
+      fprintf(file,"#define %s ((%s*)(int)__err_%s)\n",l->name,error,l->name);
+      l = l->next;
+    }
+  }
+  fprintf(file,"\n");
+}
+
+void WriteHeader(void) {
+
+  if (!opt.hfile)
+    return;
+
+  error = (opt.oslib) ? "os_error" : "_kernel_oserror";
+  regs  = (opt.oslib) ? "os_register_block" : "_kernel_swi_regs";
+
+  file = fopen(opt.hfile, "w");
+  if (file == NULL)
+    ErrorFatal("Couldn't create header file: %s", opt.hfile);
+
+  fprintf(file, "/* Generated by CMunge " VERSION " [" DATE "] */\n");
+  fprintf(file, "/* CMunge Copyright (C) 1999 Robin Watts/Justin Fletcher */\n\n");
+  fprintf(file, "#ifndef _CMUNGE_H_\n");
+  fprintf(file, "#define _CMUNGE_H_\n\n");
+
+  if (opt.oslib)
+    fprintf(file, "#include \"os.h\"\n\n");
+  else
+    fprintf(file, "#include \"kernel.h\"\n\n");
+
+  fprintf(file, "#define CMUNGE_VERSION (" VERSION_NUM ")\n\n");
+
+  fprintf(file, "#define Module_Title\t\t\"%s\"\n", opt.title);
+  fprintf(file, "#define Module_Help\t\t\"%s\"\n", opt.help);
+  /* JRF: Odd deviance from CMHG - we use the full help string, it uses just
+          the name. To my mind, we're doing things more sensibly given the
+          name of the define */
+  fprintf(file, "#define Module_VersionString\t\"%d.%02d\"\n", opt.version/100, opt.version%100);
+  fprintf(file, "#define Module_Version\t\t(%d)\n", opt.version);
+  /* JRF: deviance: we use brackets; effect: none */
+  fprintf(file, "#ifndef Module_Date\n");
+  fprintf(file, "#define Module_Date\t\t\"%s\"\n", opt.date);
+  fprintf(file, "#endif\n");
+  if (opt.mfile)
+    fprintf(file, "#define Module_MessagesFile\t\"%s\"\n", opt.mfile);
+
+  fprintf(file, "\n");
+
+  fprintf(file, "#ifdef __cplusplus\n");
+  fprintf(file, "extern \"C\" {\n");
+  fprintf(file, "#endif\n\n");
+
+  if (opt.base)
+    fprintf(file, "extern int Image__RO_Base;\n\n");
+
+  if (opt.runnable)
+    mainp();
+  if (opt.init)
+    init();
+  if (opt.final)
+    fin();
+  if (opt.service)
+    service();
+  if (opt.helpfn)
+    commands();
+  if (opt.swi_handler || opt.swi_special)
+    swi_handler();
+  if (opt.swi_decoder)
+    swi_decoder();
+  if (opt.events)
+    event_handler();
+  if (opt.irqs)
+    handlers(opt.irqs, "Irq");
+  if (opt.generics)
+    handlers(opt.generics, "Generic");
+  if (opt.vectors)
+    handlers(opt.vectors, "Vector");
+  if (opt.error_base)
+    errors();
+
+  fprintf(file, "#ifdef __cplusplus\n");
+  fprintf(file, "}\n");
+  fprintf(file, "#endif\n\n");
+
+  fprintf(file, "#endif\n");
+
+  fclose(file);
+}
+
+/* we output an assembler hdr file sometimes, so that we don't have
+   to worry about anything nasty like inconsistant constructs; the only
+   important ones here really are the SWI numbers which it is very useful
+   to have in an exported hdr file */
+void WriteAsmHeader(void) {
+
+  if (!opt.hdrfile)
+    return;
+
+  file = fopen(opt.hdrfile, "w");
+  if (file == NULL)
+    ErrorFatal("Couldn't create assembler header file: %s", opt.hdrfile);
+
+  fprintf(file, "; Generated by CMunge " VERSION " [" DATE "]\n");
+  fprintf(file, "; CMunge Copyright (C) 1999 Robin Watts/Justin Fletcher\n\n");
+
+  if (opt.swi_handler)
+    hdr_swis();
+
+  fprintf(file, "\n\n\tEND\n");
+  fclose(file);
+}

@@ -1,0 +1,51 @@
+/*
+ * Copyright (C) 1999 Robin Watts/Justin Fletcher
+ */
+
+#include <stdio.h>
+
+#include "MemCheck.h"
+
+#include "options.h"
+#include "readfile.h"
+#include "writefile.h"
+#include "writeheader.h"
+#include "assemble.h"
+#include "datestamp.h"
+#include "blank.h"
+
+int main(int argc, char *argv[]) {
+
+  MemCheck_Init();
+  MemCheck_RegisterArgs(argc, argv);
+
+  printf("CMunge " VERSION " [" DATE "]\nCopyright (C) 1999 Robin Watts/Justin Fletcher\n");
+  /* If you alter this code, insert a printf here to say that you have */
+#if 0
+  printf("The following modifications made by Justin Fletcher\n");
+  printf("  * Addition of error-chunk-base-number\n");
+  printf("  * Assembler header file\n");
+  printf("  * Tidied SWI numbers in header\n");
+  printf("  * Added support for -d with no output\n");
+  printf("  * Re-added throwback support in error.c\n");
+  printf("  * Reworked field parser to be more generic\n");
+  printf("  * Fixed include handling to work with empty files\n");
+  printf("  * Tidied up (?) header file production\n");
+  printf("  * Added -blank generation\n");
+  printf("  * Error messages included in header\n");
+  printf("  * SWI handler extensions\n");
+#endif
+  Options_Init();
+  Options_CL(argc, argv);
+  Options_CheckSanity();
+  WriteBlank();
+  ReadFile();
+  Options_CheckSanityPostRead();
+  DateStamp();
+  WriteFile();
+  WriteHeader();
+  WriteAsmHeader();
+  AssembleFile();
+
+  return 0;
+}

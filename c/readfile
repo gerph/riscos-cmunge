@@ -1,0 +1,1010 @@
+/*
+ * Copyright (C) 1999 Robin Watts/Justin Fletcher
+ */
+
+#include <stdio.h>
+#include <ctype.h>
+#include <string.h>
+#include <stdlib.h>
+
+#include "error.h"
+#include "mem.h"
+#include "options.h"
+#include "str.h"
+#include "readfile.h"
+
+#define UNUSED(x) { x=x; }
+
+/*****************************************************************************
+ * This set of functions are Fgetc/feof replacements with Fungetc.
+ *****************************************************************************/
+
+static char unget_c;
+static int unget = 0;
+
+static char Fgetc(FILE *file) {
+
+  if (unget) {
+    unget = 0;
+    return unget_c;
+  } else {
+    return fgetc(file);
+  }
+}
+
+static int Feof(FILE *file) {
+
+  if (unget) {
+    return 0;
+  } else {
+    return feof(file);
+  }
+}
+
+static void Fungetc(FILE *file, char c) {
+
+  unget = 1;
+  unget_c = c;
+}
+
+/*****************************************************************************
+ * This set of functions are a grotty line buffer implementation that
+ * dynamically grows as required.
+ *****************************************************************************/
+
+static char *linebuf = NULL;
+static int   bufsize = 128;
+static int   linepos = 0;
+
+static void bump(void) {
+
+  bufsize *= 2;
+  linebuf = Realloc(linebuf, bufsize);
+}
+
+static void lineinit(void) {
+
+  linepos = 0;
+}
+
+static void insert(char c) {
+
+  linebuf[linepos] = c;
+  linepos++;
+  if (linepos >= bufsize)
+    bump();
+}
+
+static void uninsert(void) {
+
+  linepos--;
+}
+
+/*****************************************************************************
+ * This nightmare function is a line parser for CMHG files. Its horrible, but
+ * blame Acorn for the wierd rules CMHG set for when reading should continue
+ * onto the next line, when commas are required etc...
+ *****************************************************************************/
+
+/* FIXME: Blatent assumption that preprocessor lines are < 1024 chars */
+static char prelinebuf[1024];
+/* FIXME: ... and that filenames are < 256 chars */
+static char filename[256];
+
+static void preprocess(FILE *file) {
+
+  char c;
+  int i;
+  int line;
+
+  if (Feof(file))
+    ErrorFatal("Corrupt preprocessor line found!");
+  i = 0;
+  do {
+    c = Fgetc(file);
+    prelinebuf[i++] = c;
+  } while ((!Feof(file)) && (c != '\n') && (i < 1023));
+  prelinebuf[i] = 0;
+  if (c != '\n') {
+    while ((!Feof(file)) && (c != '\n')) {
+      c = Fgetc(file);
+    }
+  }
+
+  /* Now we have the line in prelinebuf */
+  /* Spot the preprocessor directives */
+  if (sscanf(prelinebuf,"line %i \"%[^\"]\"",&line,&filename)==2) {
+    opt.atline = line-1;
+    Free(opt.infile);
+    opt.infile = strdup(filename);
+  } else {
+    ErrorFatal("Unknown preprocessor command encountered: #%s", prelinebuf);
+  }
+}
+
+static char *getline(FILE *file) {
+
+  char c;
+  int comma, discarding, whitespace;
+  int quoting, level, escape, concat;
+  int done, linestart;
+
+  lineinit();
+  /* First, skip whitespace */
+  c = ' ';
+  discarding = 0;
+  whitespace = 0;
+  quoting = 0;
+  level = 0;
+  done = 0;
+  comma = 0;
+  escape = 0;
+  concat = 0;
+  linestart = 1;
+  while (!Feof(file) && (!done)) {
+    while (!Feof(file) && (isspace(c))) {
+      if (c=='\n') {
+        opt.atline++;
+        linestart = 1;
+      }
+      c = Fgetc(file);
+    }
+    if (!Feof(file)) {
+      while (!Feof(file)) {
+        if (linestart && concat && (!isspace(c)) && (c != '\"') && (level == 0)) {
+          Fungetc(file,c);
+          done=1;
+          break;
+        }
+        /* Check for preprocess line */
+        if ((c == '#') && linestart) {
+          preprocess(file);
+          linestart = 1;
+        } else {
+          if (!isspace(c))
+            linestart = 0;
+          if (c == '\n')
+            linestart = 1;
+          /* Not a preprocess line */
+          if (c == '\\') {
+            if (escape) {
+              insert('\\');
+              escape = 0;
+            } else
+              escape = 1;
+            if (!discarding) {
+              comma = 0;
+              concat = 0;
+            }
+          } else if (c == '\"') {
+            if (!discarding) {
+              if (!escape) {
+                quoting = !quoting;
+                if (concat) {
+                  concat = 0;
+                  uninsert();
+                } else {
+                  if (!quoting)
+                    concat = 1;
+                  insert('"');
+                }
+                comma = 0;
+  	      } else {
+                insert('\\');
+                insert('"');
+      	        concat = 0;
+                comma = 0;
+              }
+            }
+          } else if (c == 'n') {
+            if (!discarding) {
+              if (escape) {
+                insert('\n');
+                comma = 0;
+                concat = 0;
+              } else {
+                insert('n');
+                comma = 0;
+                concat = 0;
+              }
+            }
+          } else if (c == 't') {
+            if (!discarding) {
+              if (escape) {
+                insert('\t');
+                comma = 0;
+                concat = 0;
+              } else {
+                insert('t');
+                comma = 0;
+                concat = 0;
+              }
+  	  }
+          } else if (c == 'v') {
+            if (!discarding) {
+              if (escape) {
+                insert('\v');
+                comma = 0;
+                concat = 0;
+              } else {
+                insert('v');
+                comma = 0;
+                concat = 0;
+              }
+            }
+          } else if (c == 'r') {
+            if (!discarding) {
+              if (escape) {
+                insert('\r');
+                comma = 0;
+                concat = 0;
+              } else {
+                insert('r');
+                comma = 0;
+                concat = 0;
+              }
+            }
+          } else if (quoting) {
+            if (c == '\n')
+              ErrorFatal("Newline found in unclosed string");
+            insert(c);
+            comma = 0;
+            concat = 0;
+            opt.atline++;
+          } else if (c == '(') {
+            if (!discarding) {
+              insert(c);
+              comma = 0;
+              concat = 0;
+              level++;
+            }
+          } else if (c == ')') {
+            if (!discarding) {
+              insert(c);
+              comma = 0;
+              concat = 0;
+              level--;
+              if (level < 0)
+                ErrorFatal("Too many closing parentheses!");
+            }
+          } else if (c == ';') {
+            /* Discard to end of line */
+            discarding = 1;
+          } else if (c == '\n') {
+            opt.atline++;
+            discarding = 0;
+            if ((comma == 0) && (level == 0) && (concat==0))
+              done = 1;
+            break;
+          } else if (c == ',') {
+            if (!discarding) {
+              insert(',');
+              comma = 1;
+              concat = 0;
+            }
+          } else if (isspace(c)) {
+            if (!whitespace && !discarding && !concat) {
+              insert(' ');
+              if (!quoting)
+                whitespace = 1;
+            }
+          } else {
+            if (!discarding) {
+              insert(c);
+              whitespace = 0;
+              comma = 0;
+              concat = 0;
+            }
+          }
+        }
+        if (c != '\\')
+          escape = 0;
+        c = Fgetc(file);
+      }
+    }
+  }
+  insert(0);
+
+  return linebuf;
+}
+
+/*****************************************************************************
+ * Starts to get cleaner from here :-)
+ * parse_line calls getline and then deals with the returned string, setting
+ * up the 'options' structure as required.
+ *****************************************************************************/
+
+static void read_services(const char *s, FILE *file) {
+
+  int_list *l;
+
+  UNUSED(file);
+
+  if (opt.service)
+    ErrorFatal("Only supply one service-handler!");
+  s = strduptok(s, &opt.service);
+  if (*s == ',')
+    while (isspace(*s))
+      s++;
+  if (*s == 0) {
+    Warning("No list of services given for handler; may degrade system performance!");
+    return;
+  }
+  l = &opt.services;
+  while (*s != 0) {
+    *l = Malloc(sizeof(**l));
+    s = strint(s, &(*l)->val);
+    while (isspace(*s))
+      s++;
+    /* Skip a , if there is one */
+    if (*s == ',')
+      s++;
+    while (isspace(*s))
+      s++;
+    l = &((*l)->next);
+  }
+  *l = NULL;
+}
+
+static void read_events(const char *s, FILE *file) {
+
+  int_list *l;
+
+  UNUSED(file);
+
+  opt.events = Malloc(sizeof(*opt.events));
+  s = strfindpair(s, &opt.events->name, &opt.events->handler);
+  opt.events->next = NULL;
+  if (*s == ',')
+    while (isspace(*s))
+      s++;
+  if (*s == 0) {
+    Warning("Not specifying event numbers impedes system performance!");
+    return;
+  }
+  l = &opt.event_nums;
+  while (*s != 0) {
+    *l = Malloc(sizeof(**l));
+    s = strint(s, &(*l)->val);
+    /* Skip a , if there is one */
+    if (*s == ',')
+      while (isspace(*s))
+        s++;
+    l = &((*l)->next);
+  }
+  *l = NULL;
+}
+
+static void read_swis(const char *s, FILE *file) {
+
+  swi_list *l;
+
+  UNUSED(file);
+
+  if (opt.swi_names)
+    ErrorFatal("Only supply one swi-decoding-table!");
+
+  opt.swi_names = Malloc(sizeof(*opt.swi_names));
+  s = strduptok(s, &opt.swi_names->name);
+  l = &opt.swi_names->next;
+  s = strcomma(s);
+  /* This is probably actually legal! */
+  //if (*s == 0)
+  //  ErrorFatal("SWI prefix supplied, but no SWI names!");
+  while (*s != 0) {
+    *l = Malloc(sizeof(*opt.swi_names));
+    s = strfindpair(s, &(*l)->name, &(*l)->handler);
+    if ((*l)->handler)
+      opt.swi_special=1;
+    l = &(*l)->next;
+    s = strcomma(s);
+  }
+  *l = NULL;
+}
+
+static void read_errors(const char *s, FILE *file) {
+
+  error_list *l;
+
+  l = &opt.errors;
+  while (*s != 0) {
+    *l = Malloc(sizeof(**l));
+    s = strduptok(s, &(*l)->name);
+    s = strskip(s, '(');
+    (*l)->message        = NULL;
+    while (*s != ')') {
+      if (strprefix(s, "\"")) {
+        if ((*l)->message != NULL)
+          ErrorFatal("error message for %s supplied twice!",(*l)->name);
+        s = strstring(s, &(*l)->message);
+      } else if (*s == 0) {
+        while ((*s == 0) && !Feof(file)) {
+          s = getline(file);
+          while (isspace(*s) && (!Feof(file)))
+            s++;
+        }
+      } else {
+        ErrorFatal("Unknown argument in error-identifiers: %s", s);
+        break;
+      }
+      s = strcomma(s);
+    }
+    if ((*l)->message     == NULL)
+      ErrorFatal("Missing error message in %s",(*l)->name);
+
+    s = strskip(s, ')');
+    s = strcomma(s);
+    l = &(*l)->next;
+  }
+  *l = NULL;
+}
+
+static void read_commands(const char *s, FILE *file) {
+
+  help_list *l;
+
+  if (opt.commands)
+    ErrorFatal("Only supply one command-keyword-table!");
+  s = strduptok(s, &opt.helpfn);
+  s = strcomma(s);
+  while ((*s == 0) && !Feof(file)) {
+    s = getline(file);
+    while (isspace(*s) && (!Feof(file)))
+      s++;
+  }
+  l = &opt.commands;
+  while (*s != 0) {
+    *l = Malloc(sizeof(**l));
+    s = strduptok(s, &(*l)->name);
+    s = strskip(s, '(');
+    (*l)->min_args       = -1;
+    (*l)->max_args       = -1;
+    (*l)->gstrans        = -1;
+    (*l)->fs_command     = -1;
+    (*l)->status         = -1;
+    (*l)->configure      = -1;
+    (*l)->help           = -1;
+    (*l)->status         = -1;
+    (*l)->international  = -1;
+    (*l)->add_syntax     = -1;
+    (*l)->invalid_syntax = NULL;
+    (*l)->help_text      = NULL;
+    while (*s != ')') {
+      if (strprefix(s, "min-args:")) {
+        if ((*l)->min_args != -1)
+          ErrorFatal("min-args supplied twice!");
+        s += strlen("min-args:");
+        s = strint(s, (unsigned int *)&(*l)->min_args);
+      } else if (strprefix(s, "max-args:")) {
+        if ((*l)->max_args != -1)
+          ErrorFatal("max-args supplied twice!");
+        s += strlen("max-args:");
+        s = strint(s, (unsigned int *)&(*l)->max_args);
+      } else if (strprefix(s, "gstrans-map:")) {
+        if ((*l)->gstrans != -1)
+          ErrorFatal("gstrans-map supplied twice!");
+        s += strlen("gstrans-map:");
+        s = strint(s, (unsigned int *)&(*l)->gstrans);
+      } else if (strprefix(s, "fs-command:")) {
+        if ((*l)->fs_command != -1)
+          ErrorFatal("fs-command supplied twice!");
+        s += strlen("fs-command:");
+        (*l)->fs_command = 1;
+      } else if (strprefix(s, "international:")) {
+        if ((*l)->international != -1)
+          ErrorFatal("international supplied twice!");
+        s += strlen("international:");
+        (*l)->international = 1;
+      } else if (strprefix(s, "add-syntax:")) {
+        if ((*l)->add_syntax != -1)
+          ErrorFatal("add-syntax supplied twice!");
+        s += strlen("add-syntax:");
+        (*l)->add_syntax = 1;
+      } else if (strprefix(s, "status:")) {
+        if ((*l)->status != -1)
+          ErrorFatal("status supplied twice!");
+        s += strlen("status:");
+        (*l)->status = 1;
+      } else if (strprefix(s, "configure:")) {
+        if ((*l)->configure != -1)
+          ErrorFatal("configure supplied twice!");
+        s += strlen("configure:");
+        (*l)->configure = 1;
+      } else if (strprefix(s, "help:")) {
+        if ((*l)->help != -1)
+          ErrorFatal("help supplied twice!");
+        s += strlen("help:");
+        (*l)->help = 1;
+      } else if (strprefix(s, "invalid-syntax:")) {
+        if ((*l)->invalid_syntax != NULL)
+          ErrorFatal("invalid-syntax supplied twice!");
+        s += strlen("invalid-syntax:");
+        s = strstring(s, &(*l)->invalid_syntax);
+      } else if (strprefix(s, "help-text:")) {
+        if ((*l)->help_text != NULL)
+          ErrorFatal("help-text supplied twice!");
+        s += strlen("help-text:");
+        s = strstring(s, &(*l)->help_text);
+      } else if (Feof(file)) {
+        ErrorFatal("Ran out of file when parsing command details!");
+        break;
+      } else if (*s == 0) {
+        while ((*s == 0) && !Feof(file)) {
+          s = getline(file);
+          while (isspace(*s) && (!Feof(file)))
+            s++;
+        }
+      } else {
+        ErrorFatal("Unknown argument in command-description: %s", s);
+        break;
+      }
+      s = strcomma(s);
+    }
+    if ((*l)->min_args      == -1)
+      (*l)->min_args      = 0;
+    if ((*l)->max_args      == -1)
+      (*l)->max_args      = 0;
+    if ((*l)->gstrans       == -1)
+      (*l)->gstrans       = 0;
+    if ((*l)->fs_command    == -1)
+      (*l)->fs_command    = 0;
+    if ((*l)->status        == -1)
+      (*l)->status        = 0;
+    if ((*l)->configure     == -1)
+      (*l)->configure     = 0;
+    if ((*l)->help          == -1)
+      (*l)->help          = 0;
+    if ((*l)->status        == -1)
+      (*l)->status        = 0;
+    if ((*l)->international == -1)
+      (*l)->international = 0;
+    if ((*l)->add_syntax    == -1)
+      (*l)->add_syntax    = 0;
+    s = strskip(s, ')');
+    s = strcomma(s);
+    l = &(*l)->next;
+  }
+  *l = NULL;
+}
+
+static void read_handlers(const char *s, handler_list *h) {
+
+  while (*s != 0) {
+    *h = Malloc(sizeof(**h));
+    s = strfindpair(s, &(*h)->name, &(*h)->handler);
+    h = &(*h)->next;
+    s = strcomma(s);
+  }
+  *h = NULL;
+}
+
+static void read_swidec(const char *s, FILE *file) {
+
+  handler_list h;
+
+  UNUSED(file);
+
+  h = Malloc(sizeof(*h));
+  h->next = NULL;
+  s = strfindpair(s, &h->name, &h->handler);
+  opt.swi_decoder = h;
+  if (*s != 0)
+    ErrorFatal("Junk found at end of swi-decoding-code!");
+}
+
+/* Notes about the blank section :
+    * The 'blank' data is used to generate a blank cmhg file.
+    * All ft_alias entries will be ignored.
+    * Fields will be used IN ORDER
+    * Comments will be word wrapped by the blank generation code
+    * End your sentances with a .
+*/
+
+static void read_generics(const char *s, FILE *file)
+{
+  UNUSED(file);
+  read_handlers(s, &opt.generics);
+}
+
+static void read_irqs(const char *s, FILE *file)
+{
+  UNUSED(file);
+  read_handlers(s, &opt.irqs);
+}
+
+static void read_vectors(const char *s, FILE *file)
+{
+  UNUSED(file);
+  read_handlers(s, &opt.vectors);
+}
+
+
+field_t fields[] =
+{
+  { "module-is-runnable",          { NULL, ft_flag_on,  &opt.runnable },
+    { "",
+      "If you declare module-is-runnable the module will be entered "
+      "at the main() function in user mode (ie like a normal C program).\n"
+      "You will probably never need this field."
+    } },
+
+  { "module-is-not-reentrant",     { NULL, ft_flag_off, &opt.reentrant },
+    { "",
+      "When your module cannot be reentered you should declare this. "
+      "At present it does nothing.\n"
+      "You will probably never need this field."
+    } },
+
+  { "title-string",                { NULL, ft_label,    &opt.title },
+    { "ModuleName",
+      "You should give your module a sensible name which describes its "
+      "purpose both accurately and concisely. You must register any "
+      "module names you use if they are to be distributed."
+    } },
+
+  { "help-string",                 { NULL, ft_string,   &opt.help },
+    { "ModuleDescription 0.01 Tail message",
+      "The help-string is the name that is displayed to the user in *Help "
+      "Modules and other places that a more readable name is required. "
+      "You should attempt to make this a readable version of the "
+      "title-string, and - at worst - use the same name as in the "
+      "title-string. The tail message may be used to indicate a variant "
+      "of the module, or a copyright string."
+    } },
+
+  { "swi-chunk-base-number",       { NULL, ft_int64,    &opt.swi_base },
+    { "&1280", /* Change this to a number in the user allocatable range */
+      "If you supply SWIs in your module, you must provide a base number "
+      "at which these start. Each chunk is 64 entries long and must be "
+      "registered if the module is going to be distributed."
+    } },
+
+  { "error-base",                  { NULL, ft_int64,    &opt.error_base },
+    { "&1280", /* Make sure this is a user allocatable one too */
+      "If you have any error messages in your module that are returned "
+      "through the standard interfaces, you should use different error "
+      "numbers for each, starting at a base number. You should register "
+      "your error bases before distributing the module. Using random "
+      "error numbers is dangerous."
+    } },
+  { "error-chunk-base-number",     { NULL, ft_alias,   (void*)"error-base" } },
+
+  { "error-identifiers",           { read_errors, ft_check, &opt.errors },
+    { "err_Silly(\"Silly\")",
+      "Allocating error messages within the module is more efficient than "
+      "doing so manually in your C code, and is less likely to pollute "
+      "error number space."
+    } },
+
+  { "initialisation-code",         { NULL, ft_label,    &opt.init },
+    { "Mod_Init",
+      "When the module is initialised, this routine will be entered. You "
+      "should be very careful to initialise your module safely. If anything "
+      "fails, you can return an error message. Finalisation code will not "
+      "be called if you return an error."
+    } },
+
+  { "finalisation-code",           { NULL, ft_label,    &opt.final },
+    { "Mod_Final",
+      "When the module is killed, this routine will be entered. If you "
+      "do not wish to be killed then you should return an error and retain "
+      "as much of the current state as possible. Causing an abort in this "
+      "routine will leave a 'dead' module in the chain."
+    } },
+
+  { "international-help-file",     { NULL, ft_quoted,   &opt.mfile },
+    { "\"Resources:$.ThirdParty.ModuleName.Messages\"",
+      "Syntax and help messages may be internationalised by using a messages "
+      "file."
+    } },
+
+  { "swi-handler-code",            { NULL, ft_label,    &opt.swi_handler },
+    { "Mod_SWI",
+      "The SWI handler is entered for every SWI the module provides. "
+      "Generally, this is a switch statement, to dispatch each of the SWIs "
+      "that are known."
+    } },
+
+  { "swi-decoding-code",           { read_swidec },
+    { "Mod_SWIDecoder",
+      "The SWI decoding code performs name-to-number and number-to-name "
+      "translations for this module. In practice, you very rarely need to "
+      "use this.\n"
+      "You will probably never need this field."
+    } },
+
+  { "swi-decoding-table",          { read_swis },
+    { "Prefix One Two Three",
+      "The SWI decoding table lists the SWIs which the module supplies. "
+      "The first entry is always the SWI prefix, used on all SWIs that the "
+      "module provides. This should be the name of the module, or some "
+      "obvious variant. You should register your SWI prefixes when you "
+      "register a SWI chunk. Each name entry may be followed by /<entry> "
+      "to use a particular routine to handle a SWI.\n"
+    } },
+
+  { "library-init-code",           { NULL, ft_label,    &opt.lib_init },
+    { "_clib_initialisemodule",
+      "The library initialisation code sets up the C environment for use "
+      "with this module. You may wish to perform some initialisation prior "
+      "to the C environment being created. You must call "
+      "_clib_initialisemodule prior to returning, or provide an identical "
+      "functionality.\n"
+      "You will probably never need this field."
+    } },
+  { "library-initialisation-code", { NULL, ft_alias, (void*)"library-init-code"} },
+
+  { "date-string",                 { NULL, ft_string,   &opt.datestring },
+    { "21 Dec 1999",
+      "The date-string is optional and should only be included if you feel "
+      "that a date is a different reference to the version number. Certain "
+      "ports from other platforms may wish to indicate their source base "
+      "date using this field.\n"
+      "You will probably never need this field."
+    } },
+
+  { "generic-veneers",            { read_generics, ft_check, &opt.generics },
+    { "Veneer_Entry/Veneer_Call",
+      "Generic veneers are used to provide a simple C environment for SVC "
+      "and IRQ modes. You should register the Entry routine as the external "
+      "interface (ie provide it as the code address to call). The Call "
+      "routine will be called from this."
+    } },
+
+  { "irq-handlers",                { read_irqs,     ft_check, &opt.irqs },
+    { "IRQ_Entry/IRQ_Call",
+      "IRQ veneers are used to provide a simple C environment for SVC "
+      "and IRQ modes. You should register the Entry routine as the external "
+      "interface (ie provide it as the code address to call). The Call "
+      "routine will be called from this. You can return 0 or 1 from your "
+      "routine to say you either handled the interrupt, or did not."
+    } },
+
+  { "vector-handlers",             { read_vectors,  ft_check, &opt.vectors },
+    { "Vector_Entry/Vector_Call",
+      "Vector veneers are used to provide a simple C environment for SVC "
+      "and IRQ modes. You should register the Entry routine as the external "
+      "interface (ie provide it as the code address to call). The Call "
+      "routine will be called from this. You can return 0 or 1 from your "
+      "routine to say you either handled the interrupt, or did not."
+    } },
+
+  { "event-handler",               { read_events,   ft_check, &opt.events },
+    {
+      "Event_Entry/Event_Call 1 2 3 4 5 6",
+      "Event handlers are used to provide a simple C environment for SVC "
+      "and IRQ modes. You should register the Entry routine as the external "
+      "interface (ie provide it as the code address to call). The Call "
+      "routine will be called from this. You can return 0 or 1 from your "
+      "routine to say you either handled the interrupt, or did not. The "
+      "list of numbers at the end of the line indicates which events (in "
+      "R0) will be passed to the Call routine. You can also trap upcalls "
+      "with an event handler, as their reason codes are also passed in R0."
+    } },
+
+  { "command-keyword-table",       { read_commands },
+    { "Mod_Command\n   ModuleCommand()",
+      "The command table is one of the more complex fields in the CMHG "
+      "file. The first entry is the routine to call to process the "
+      "commands as they arrive. The remainder of the entries are the "
+      "command definitions. These take the form :\n"
+      "  <Command>({<field>: <value>})\n"
+      "\n"
+      "Field names:\n"
+      "  min-args: <number>    Minimum number of arguments to command\n"
+      "  max-args: <number>    Maximum number of arguments to command\n"
+      "  gstrans-map: <bits>   Bitmap of arguments that should be GSTrans'd\n"
+      "  fs-command:           Declares that this is a filing system command\n"
+      "  international:        Declares this this uses international tokens\n"
+      "  add-syntax:           Adds the syntax message to the help message\n"
+      "  configure:            Declares that this is a configuration name\n"
+      "  status:               Declares that this is a configuration name\n"
+      "  help:                 Declares that we want to be called for help\n"
+      "                        message processing. Not implemented\n"
+      "  help-text: <string>   The text/token to use for *Help\n"
+      "  invalid-syntax: <string>  The text/token to use for syntax errors"
+    } },
+
+  { "service-call-handler",        { read_services },
+    {
+      "Mod_Service 1 2 3 4 5 6",
+      "The module service entry will be called to process services. You "
+      "are strongly recommended to include the numbers of the services "
+      "you wish to handle."
+    } },
+
+  { NULL } /* zero terminated end of list */
+};
+
+static void parse_line(FILE *file) {
+
+  char *line;
+
+  line = getline(file);
+  if (line[0] == '\0')
+    return; /* Null lines are just fine */
+
+  { /* Search for field block */
+    field_t *field;
+    char *colon=strchr(line,':');
+    const char *tail;
+
+    if (colon==NULL)
+    {
+      ErrorFatal("Field names should be of the form <field>: [<value>]");
+    }
+    *colon++='\0';
+    tail=colon;
+
+    /* Skip any prefix of whitespace */
+    while (isspace(*tail))
+      tail++;
+
+    do {
+      field=fields;
+      while (field->name && !strncasecmp(field->name,line))
+        field++;
+      if (field==NULL)
+        ErrorFatal("Unknown command: '%s'\n", line);
+      if (field->values.type==ft_alias)
+        line=(char *)field->values.value; /* It's an alias */
+    } while (field->values.type==ft_alias);
+
+    if (field->values.func)
+    { /* We have a function for special processing of this field, so we
+         have to call it to deal with the more complex trailling data */
+      int *value=(int *)field->values.value;
+      if (field->values.type==ft_check)
+      { /* They've asked us to check dupe declarations, so we'd better */
+        if (*value != 0)
+          ErrorFatal("Only supply one %s field!",field->name);
+      }
+      field->values.func(tail,file);
+      return; /* All the processing for that is done */
+    }
+
+    /* Do they type based checks */
+    switch (field->values.type)
+    {
+      case ft_flag_on:
+      case ft_flag_off:
+        {
+          int flag;
+          int *value=(int *)field->values.value;
+          if (*tail=='\0')
+          { /* They want the default operation */
+            if (field->values.type==ft_flag_on)
+              flag=1;
+            else
+              flag=0;
+          }
+          else
+          {
+            /* You might like to add On/Off checking here to add some nicer
+               user interface for it */
+            ErrorFatal("Tailing junk after %s",field->name);
+          }
+          *value=flag;
+        }
+        break;
+
+      case ft_int:
+        {
+          unsigned int *value=(unsigned int *)field->values.value;
+          if (*value!=0)
+            ErrorFatal("Only supply one %s field!",field->name);
+          tail = strint(tail, value);
+          if (*value==0)
+            ErrorFatal("Illegal %s: %i", field->name,*value);
+          if (*tail!='\0')
+            ErrorFatal("Tailing junk after %s",field->name);
+        }
+        break;
+
+      case ft_int64:
+        {
+          unsigned int *value=(unsigned int *)field->values.value;
+          if (*value!=0)
+            ErrorFatal("Only supply one %s field!",field->name);
+          tail = strint(tail, value);
+          if ((*value==0) || (*value & 0x3f))
+            ErrorFatal("Illegal %s: 0x%08x", field->name,*value);
+          if (*tail!='\0')
+            ErrorFatal("Tailing junk after %s",field->name);
+        }
+        break;
+
+      case ft_label:
+      case ft_quoted:
+        {
+          char **value=(char **)field->values.value;
+          if (*value!=NULL)
+            ErrorFatal("Only supply one %s field!",field->name);
+
+          if (field->values.type==ft_label)
+            tail = strduptok(tail, value);
+          else
+            tail = strstring(tail, value);
+          if (*tail != 0)
+            ErrorFatal("Tailing junk after %s",field->name);
+        }
+        break;
+
+      case ft_string:
+        {
+          char **value=(char **)field->values.value;
+          if (*value!=NULL)
+            ErrorFatal("Only supply one %s field!",field->name);
+
+          *value=strdup(tail);
+        }
+        break;
+
+      default:
+        /* Erm... what the hell have you done to my nice little description
+           block */
+        ErrorFatal("Programmer confusion error (%s:%s: ft: %i)",
+                   field->name,line,field->values.type);
+    }
+  }
+}
+
+void ReadFile(void) {
+
+  FILE *file;
+  int rc;
+  char buf[2048]; /* Make this a dynamic buffer, please! */
+  char *bufend;
+  defines_list defines;
+  include_list includes;
+
+  if (opt.pfile) {
+    bufend = buf+sprintf(buf, "cc -E -C++ %s > %s", opt.infile, opt.pfile);
+    defines = opt.defines;
+    while (defines) {
+      if (defines->invert) {
+        bufend += sprintf(bufend, " -U%s", defines->name);
+      } else {
+        if (defines->value)
+          bufend += sprintf(bufend, " -D%s=%s", defines->name, defines->value);
+        else
+          bufend += sprintf(bufend, " -D%s", defines->name);
+      }
+      defines=defines->next;
+    }
+    includes = opt.includes;
+    while (includes) {
+      bufend += sprintf(bufend, " -I%s", includes->path);
+      includes = includes->next;
+    }
+    if (opt.throwback)
+      bufend += sprintf(bufend," -throwback");
+/*    if (opt.dfile)
+      bufend += sprintf(bufend," -depend %s", opt.dfile); */
+    rc = system(buf);
+    switch(rc) {
+      case 0: /* All ok */
+        break;
+      case -2: /* Failed */
+        ErrorFatal("Could not start pre-processor");
+        break;
+      default: /* Some other return code */
+        exit(rc);
+    }
+    file = fopen(opt.pfile, "r");
+    if (file == NULL)
+      ErrorFatal("Temporary pre-processor file not found");
+  } else {
+    file = fopen(opt.infile, "r");
+    if (file == NULL)
+      ErrorFatal("File %s not found!", opt.infile);
+  }
+
+  /* Allocate us a linebuffer */
+  bump();
+
+  while (!Feof(file)) {
+    parse_line(file);
+  }
+  fclose(file);
+}
