@@ -1,9 +1,12 @@
-# Project:   Generic Makefile
+# Project:   CMunge Makefile
 
+# MakeDir:
+#  o
+#  aif
 
 # Toolflags:
 
-INCLUDE = C:,@.
+INCLUDE = C:,
 
 CCflags = -c -depend !Depend -I$(INCLUDE) -throwback
 CCflagsM = -c -g -depend !Depend -I$(INCLUDE) -throwback
@@ -26,113 +29,113 @@ CMHGflags =
 LibFileflags = -c -o $@
 Squeezeflags = -o $@
 
-.SUFFIXES:	.o .om .oh .oz .c .s .l .y
+.SUFFIXES:      .o .om .oh .oz .c .s .l .y
 
 .c.o:;  cc $(CCflags) -o $@ $<
 .s.o:;  OBjasm $(ObjAsmFlags) -o $@ $<
 
-.c.om:;	MemCheck.CC cc $(ccflagsM) -o $@ $<
-.c.oh:;	cc $(ccflagsH) -o $@ $<
-.c.oz:;	cc $(ccflagsZ) -o $@ $<
-
-.y.c:; bison -o$@ $<
-
-.l.c:; flex -o$@ $<
+.c.om:; MemCheck.CC cc $(ccflagsM) -o $@ $<
+.c.oh:; cc $(ccflagsH) -o $@ $<
+.c.oz:; cc $(ccflagsZ) -o $@ $<
 
 OS_FILES =
 
 OC_FILES = \
-	@.o.assemble	\
-	@.o.datestamp	\
-	@.o.error	\
-	@.o.main	\
-	@.o.mem		\
-	@.o.options	\
-	@.o.readfile	\
-	@.o.str		\
-	@.o.throwback	\
-	@.o.writeheader	\
-	@.o.writefile   \
-	@.o.blank
+        o.assemble      \
+        o.datestamp     \
+        o.error         \
+        o.main          \
+        o.mem           \
+        o.options       \
+        o.readfile      \
+        o.str           \
+        o.gfile         \
+        o.throwback     \
+        o.writeheader   \
+        o.writeexport   \
+        o.writefile     \
+        o.blank
 
 OMC_FILES = \
-	@.om.assemble	\
-	@.om.datestamp	\
-	@.om.error	\
-	@.om.main	\
-	@.om.mem	\
-	@.om.options	\
-	@.om.readfile	\
-	@.om.str	\
-	@.om.throwback	\
-	@.om.writeheader	\
-	@.om.writefile	\
-	@.om.blank
+        om.assemble     \
+        om.datestamp    \
+        om.error        \
+        om.main \
+        om.mem  \
+        om.options      \
+        om.readfile     \
+        om.str  \
+        om.throwback    \
+        om.writeheader  \
+        om.writefile    \
+        om.blank
 
 LIBS = C:o.stubs
 
 # Final targets:
-Most: @.cmunge
+Most: aif.cmunge
 
-All: @.cmunge @.cmungeM
+All: aif.cmunge aif.cmungeM
 
-Examples: @.cmunge
-        -@.examples.!Make
-        Dir @.src
+Examples: aif.cmunge
+        -examples.!Make
+        dir ^
 
-@.cmunge: @.cmungeU
-	Squeeze @.cmungeU @.cmunge
+aif.cmunge: aif.cmungeU
+        Squeeze aif.cmungeU aif.cmunge
 
-@.cmungeU: $(OC_FILES) $(OS_FILES)
-	link $(linkflags) $(OC_FILES) $(OS_FILES) $(LIBS) \
+aif.cmungeU: $(OC_FILES) $(OS_FILES)
+        link $(linkflags) $(OC_FILES) $(OS_FILES) $(LIBS) \
 
-@.cmungeM: $(OMC_FILES) $(OS_FILES)
-	link $(linkflagsD) $(OMC_FILES) $(OS_FILES) $(LIBS) \
-	MemCheck:o.MC
+aif.cmungeM: $(OMC_FILES) $(OS_FILES)
+        link $(linkflagsD) $(OMC_FILES) $(OS_FILES) $(LIBS) \
+        MemCheck:o.MC
 
 clean:
-	remove @.cmungeU
-	remove @.cmungeM
-	-wipe @.o.* ~C ~V R F
-	-wipe @.om.* ~C ~V R F
-
-release: @.cmunge
-        @echo Source release
-        -wipe @.CVS ~C~VR
-        -wipe @.h.CVS ~C~VR
-        -wipe @.c.CVS ~C~VR
-        -wipe @.o.CVS ~C~VR
-        cdir @.ReleaseSrc
-        wipe @.ReleaseSrc ~C~VR
-        cdir @.ReleaseSrc
-        cdir @.ReleaseSrc.Examples
-        cdir @.ReleaseSrc.Examples.cmhg
-        cdir @.ReleaseSrc.Examples.h
-        cdir @.ReleaseSrc.Examples.hdr
-        cdir @.ReleaseSrc.Examples.inc
-        cdir @.ReleaseSrc.Examples.o
-        cdir @.ReleaseSrc.Examples.s
-        copy @.Docs          @.ReleaseSrc.Docs ~C~VR
-        copy @.Examples.!*   @.ReleaseSrc.Examples.* ~C~VR
-        copy @.Examples.inc  @.ReleaseSrc.Examples.inc ~C~VR
-        copy @.Examples.cmhg @.ReleaseSrc.Examples.cmhg ~C~VR
-        copy @.Src           @.ReleaseSrc.Src ~C~VR
-        -wipe @.ReleaseSrc.Src.o.* ~C~VR
-        -wipe @.ReleaseSrc.Src.om.* ~C~VR
-        remove @.ReleaseSrc.Src.cmungeU
-        copy @.cmunge        @.ReleaseSrc.cmunge ~C~VR
-        @echo Binary release
-        cdir @.ReleaseBin
-        wipe @.ReleaseBin ~C~VR
-        cdir @.ReleaseBin
-        copy @.Docs          @.ReleaseBin.Docs ~C~VR
-        copy @.cmunge        @.ReleaseBin.cmunge ~C~VR
+        -wipe aif ~C ~V R F
+        -wipe o ~C ~V R F
+        -wipe om ~C ~V R F
+        -wipe $(RELEASE) ~C ~V R F
+        -wipe Release ~C ~V R F
+        dir Examples
+        /!Clean
         dir ^
-        remove BinCMunge/zip
-        zip -r -9 BinCMunge/zip ReleaseBin
-        remove SrcCMunge/zip
-        zip -r -9 SrcCMunge/zip ReleaseSrc
-        dir Src
+
+release: aif.cmunge
+        @echo -- Source $(RELEASE)
+        cdir $(RELEASE)
+        cdir $(RELEASE).Source
+        wipe $(RELEASE).Source ~C~VR
+        cdir $(RELEASE).Source
+        cdir $(RELEASE).Source.Examples
+        cdir $(RELEASE).Source.Examples.cmhg
+        cdir $(RELEASE).Source.Examples.h
+        cdir $(RELEASE).Source.Examples.hdr
+        cdir $(RELEASE).Source.Examples.inc
+        cdir $(RELEASE).Source.Examples.o
+        cdir $(RELEASE).Source.Examples.s
+        copy Docs          $(RELEASE).Source.Docs ~C~VR
+        IfThere VersionLog Then copy VersionLog $(RELEASE).Source.Docs.History ~C~VR
+        copy Examples.!*   $(RELEASE).Source.Examples.* ~C~VR
+        copy Examples.inc  $(RELEASE).Source.Examples.inc ~C~VR
+        copy Examples.cmhg $(RELEASE).Source.Examples.cmhg ~C~VR
+        copy c             $(RELEASE).Source.c ~C~VR
+        copy h             $(RELEASE).Source.h ~C~VR
+        copy Makefile      $(RELEASE).Source.Makefile ~C~VR
+        IfThere Resources Then Copy Resources.!Mk* $(RELEASE).Source.* ~C~VR Else Copy !Mk* $(RELEASE).Source.* ~C~VR
+        copy VersionNum    $(RELEASE).Source.VersionNum ~C~VR
+        @echo -- Binary $(RELEASE)
+        cdir $(RELEASE).Binary
+        wipe $(RELEASE).Binary ~C~VR
+        cdir $(RELEASE).Binary
+        copy Docs          $(RELEASE).Binary.Docs ~C~VR
+        IfThere VersionLog Then copy VersionLog $(RELEASE).Binary.Docs.History ~C~VR
+        copy aif.cmunge    $(RELEASE).Binary.cmunge ~C~VR
+        @echo -- Archive
+        IfThere Run:losecvs Then losecvs $(RELEASE)
+
+export:
+        @echo [No export of CMunge]
 
 # User-editable dependencies:
 

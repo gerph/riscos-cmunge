@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "gfile.h"
 #include "error.h"
 #include "mem.h"
 #include "options.h"
@@ -80,16 +81,16 @@ static void uninsert(void) {
   linepos--;
 }
 
-/*****************************************************************************
+/****************************************************************************
  * This nightmare function is a line parser for CMHG files. Its horrible, but
  * blame Acorn for the wierd rules CMHG set for when reading should continue
  * onto the next line, when commas are required etc...
- *****************************************************************************/
+ ***************************************************************************/
 
-/* FIXME: Blatent assumption that preprocessor lines are < 1024 chars */
+/* FIXME: Blatant assumption that preprocessor lines are < 1024 chars */
 static char prelinebuf[1024];
-/* FIXME: ... and that filenames are < 256 chars */
-static char filename[256];
+/* FIXME: ... and that filenames are < 1024 chars */
+static char filename[1024];
 
 static void preprocess(FILE *file) {
 
@@ -489,6 +490,7 @@ static void read_commands(const char *s, FILE *file) {
     (*l)->invalid_syntax = NULL;
     (*l)->help_text      = NULL;
     (*l)->handler        = NULL;
+    s = strcomma(s);
     while (*s != ')') {
       if (strprefix(s, "min-args:")) {
         if ((*l)->min_args != -1)
@@ -780,14 +782,19 @@ field_t fields[] =
       "of the module, or a copyright string."
     }, IN_BOTH },
 
-  { "swi-chunk-base-number",       { NULL, ft_int64,    &opt.swi_base },
+  { "swi-chunk-base-number",       { NULL, ft_xint64,   &opt.swi_base },
     { "&1280", /* Change this to a number in the user allocatable range */
       "If you supply SWIs in your module, you must provide a base number "
       "at which these start. Each chunk is 64 entries long and must be "
       "registered if the module is going to be distributed."
     }, IN_BOTH },
 
-  { "error-base",                  { NULL, ft_int64,    &opt.error_base },
+  /* For now we'll relax the error-base restraints. This should /really/
+     be checking for some constraints. Error blocks are allocated in
+     chunks of 256 entries. Originally this code restricted you to 64
+     entries, but Theo has pointed out that this may not be sufficiently
+     wide for all uses. Left as int for now. */
+  { "error-base",                  { NULL, ft_int,      &opt.error_base },
     { "&1280", /* Make sure this is a user allocatable one too */
       "If you have any error messages in your module that are returned "
       "through the standard interfaces, you should use different error "
@@ -950,6 +957,10 @@ static void parse_line(FILE *file) {
   char *line;
 
   line = getline(file);
+
+  while (isspace(*line))
+    line++;
+
   if (line[0] == '\0')
     return; /* Null lines are just fine */
 
@@ -999,7 +1010,7 @@ static void parse_line(FILE *file) {
       return; /* All the processing for that is done */
     }
 
-    /* Do they type based checks */
+    /* Do the type based checks */
     switch (field->values.type)
     {
       case ft_flag_on:
@@ -1038,6 +1049,7 @@ static void parse_line(FILE *file) {
         break;
 
       case ft_int64:
+      case ft_xint64:
         {
           unsigned int *value=(unsigned int *)field->values.value;
           if (*value!=0)
@@ -1045,6 +1057,8 @@ static void parse_line(FILE *file) {
           tail = strint(tail, value);
           if ((*value==0) || (*value & 0x3f))
             ErrorFatal("Illegal %s: 0x%08x", field->name,*value);
+          if ((field->values.type==ft_xint64) && (*value & 0x20000))
+            ErrorFatal("Illegal %s: 0x%08x (x bit set)", field->name,*value);
           if (*tail!='\0')
             ErrorFatal("Tailing junk after %s",field->name);
         }
@@ -1128,11 +1142,11 @@ void ReadFile(void) {
         fprintf(stderr,"Pre-processor exited with code %i unexpectedly\n",rc);
         exit(rc);
     }
-    file = fopen(opt.pfile, "r");
+    file = file_read(opt.pfile, remove_onclose);
     if (file == NULL)
       ErrorFatal("Temporary pre-processor file not found");
   } else {
-    file = fopen(opt.infile, "r");
+    file = file_read(opt.infile, remove_never);
     if (file == NULL)
       ErrorFatal("File %s not found!", opt.infile);
   }
@@ -1143,5 +1157,5 @@ void ReadFile(void) {
   while (!Feof(file)) {
     parse_line(file);
   }
-  fclose(file);
+  file_close(file);
 }

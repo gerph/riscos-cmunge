@@ -6,20 +6,26 @@
 
 #include "MemCheck.h"
 
+#include "gfile.h"
 #include "options.h"
 #include "readfile.h"
 #include "writefile.h"
 #include "writeheader.h"
+#include "writeexport.h"
 #include "assemble.h"
 #include "datestamp.h"
 #include "blank.h"
+
+#include "VersionNum"
 
 int main(int argc, char *argv[]) {
 
   MemCheck_Init();
   MemCheck_RegisterArgs(argc, argv);
 
-  printf("CMunge " VERSION " [" DATE "]\nCopyright (C) 1999 Robin Watts/Justin Fletcher\n");
+  file_init(); /* Initialise file tidy up library */
+
+  printf("CMunge " Module_FullVersionAndDate "\nCopyright (C) 1999-2000 Robin Watts/Justin Fletcher\n");
   /* If you alter this code, insert a printf here to say that you have */
 #if 0
   printf("The following modifications made by Justin Fletcher\n");
@@ -40,6 +46,11 @@ int main(int argc, char *argv[]) {
   printf("  * Removed 'strint' closing parentheses check\n");
   printf("  * Added support for -b for obsolete CMHG feature\n");
   printf("  * module-is-not-re-entrant now works\n");
+  printf("  * Fixed rogue files being left on failure\n");
+  printf("  * Long line (objasm) fixes\n");
+  printf("  * Command line parser updated to cope with rogue commas\n");
+  printf("  * SWI chunk base must not have x-bit set\n");
+  printf("  * error-chunk-base-number can have any alignment\n");
 #endif
   Options_Init();
   Options_CL(argc, argv);
@@ -50,8 +61,11 @@ int main(int argc, char *argv[]) {
   DateStamp();
   WriteFile();
   WriteHeader();
-  WriteAsmHeader();
+  WriteExport_Hdr();
+  WriteExport_H();
   AssembleFile();
+
+  file_final(); /* Mark us as successful */
 
   return 0;
 }

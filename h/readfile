@@ -19,6 +19,7 @@ typedef enum
   ft_alias,    /* An alias for another entry, name in 'value' */
   ft_int,      /* Any integer */
   ft_int64,    /* 64 aligned integer */
+  ft_xint64,   /* 64 aligned integer without x set */
   ft_string,   /* A string */
   ft_quoted,   /* A string in quotes */
   ft_label,    /* A label (one word string) */

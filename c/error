@@ -29,9 +29,7 @@ void ErrorFatal(char *err, ...) {
       fputc('\n',stderr);
   }
   else
-  {
     fputc('\n',stderr);
-  }
   exit(EXIT_FAILURE);
 }
 

@@ -6,9 +6,9 @@
 
 #define OPTIONS_H
 
-#define VERSION     "0.14"
-#define VERSION_NUM "14"
-#define DATE    "06 Feb 2000"
+#define VERSION     "0.16"
+#define VERSION_NUM "16"
+#define DATE        "31 Oct 2000"
 
 /* List of integers */
 
@@ -134,7 +134,8 @@ typedef struct {
   char         *sfile;		/* the assembler file */
   int           stemp;          /* is the assembler in a temporary file? */
   char         *hfile;		/* the C header */
-  char         *hdrfile;	/* the assembler header */
+  char         *x_hdr;		/* the assembler SWI header */
+  char         *x_h;		/* the C SWI header */
   char         *mfile;		/* Message file */
   char         *dfile;		/* Depend file */
 
