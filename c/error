@@ -28,6 +28,10 @@ void ErrorFatal(char *err, ...) {
     else
       fputc('\n',stderr);
   }
+  else
+  {
+    fputc('\n',stderr);
+  }
   exit(EXIT_FAILURE);
 }
 

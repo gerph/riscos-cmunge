@@ -154,6 +154,8 @@ void Options_CL(int argc, char *argv[]) {
       } else {
         ErrorFatal("No filename passed with -o flag!");
       }
+    } else if (strncasecmp("-blank", argv[i])) {
+      opt.blank=1;
     } else if (strncasecmp("-b", argv[i])) {
       if (opt.runnable) {
         ErrorFatal("-b flag used twice!");
@@ -234,8 +236,6 @@ void Options_CL(int argc, char *argv[]) {
       } else {
         ErrorFatal("No filename passed with -d flag!");
       }
-    } else if (strncasecmp("-blank", argv[i])) {
-      opt.blank=1;
     } else if (strncmp("-z", argv[i], sizeof("-z")-1)==0) { /* case sensitive */
       arg = &argv[i][sizeof("-z")-1];
       if (strncasecmp("oslib", arg)) {
