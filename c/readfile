@@ -1125,6 +1125,7 @@ void ReadFile(void) {
         ErrorFatal("Could not start pre-processor");
         break;
       default: /* Some other return code */
+        fprintf(stderr,"Pre-processor exited with code %i unexpectedly\n",rc);
         exit(rc);
     }
     file = fopen(opt.pfile, "r");

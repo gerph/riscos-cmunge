@@ -58,6 +58,7 @@ void AssembleFile(void) {
           /* They returned something icky. Obviously that's a fault; they
              should have already displayed an error as to the fault though.
            */
+          fprintf(stderr,"Assembler returned %i unexpectedly; aborting\n",rc);
           exit(rc);
       }
     }
