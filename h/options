@@ -6,9 +6,9 @@
 
 #define OPTIONS_H
 
-#define VERSION     "0.12"
-#define VERSION_NUM "12"
-#define DATE    "28 Dec 1999"
+#define VERSION     "0.13"
+#define VERSION_NUM "13"
+#define DATE    "29 Dec 1999"
 
 /* List of integers */
 
@@ -36,6 +36,7 @@ typedef struct help_list_s {
   char        *invalid_syntax;
   char        *help_text;
   char        *name;
+  char        *handler;
   help_list    next;
 } help_list_s;
 
@@ -99,10 +100,11 @@ typedef struct {
   char         *help;		/* help-string */
   char         *helpfn;		/* help-handler */
   help_list     commands;	/* command-keyword-table */
+  int           command_codesupplied; /* commands include handler routines */
   int           swi_base;	/* swi-shunk-base-number */
   char         *swi_handler;	/* swi-handler-code */
   swi_list      swi_names;	/* swi-decoding-table */
-  int           swi_special;	/* swis include handler routines */
+  int           swi_codesupplied; /* swis include handler routines */
   handler_list  swi_decoder;	/* swi-decoding-code */
   int           error_base;     /* error base */
   handler_list  irqs;		/* irq-handlers */
@@ -141,6 +143,9 @@ typedef struct {
   char         *pfile;          /* preprocessed file */
   defines_list  defines;        /* any defines added */
   include_list  includes;       /* Include Path List */
+
+  /* Options from the CLI */
+  int           cmhg;           /* We /are/ CMHG, to all intents and purposes */
 } options;
 
 extern options opt;

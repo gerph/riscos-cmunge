@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1999 Robin Watts/Justin Fletcher
+ * Copyright (C) 1999-2000 Robin Watts/Justin Fletcher
  */
 
 #include <stdio.h>
@@ -34,6 +34,9 @@ int main(int argc, char *argv[]) {
   printf("  * Added -blank generation\n");
   printf("  * Error messages included in header\n");
   printf("  * SWI handler extensions\n");
+  printf("  * Fixed -hdr output to work without output file\n");
+  printf("  * Corrected throwback handling\n");
+  printf("  * Added code handler routines\n");
 #endif
   Options_Init();
   Options_CL(argc, argv);

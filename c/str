@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1999 Robin Watts/Justin Fletcher
+ * Copyright (C) 1999-2000 Robin Watts/Justin Fletcher
  */
 
 #include <stdio.h>
@@ -46,7 +46,8 @@ const char *strduptok(const char *p, char **res) {
   while (isspace(*p))
     p++;
   s = p;
-  while (!isspace(*p) && (*p != ',') && (*p != '(') && (*p != 0))
+  while (!isspace(*p) && (*p != ',') && (*p != ')') &&
+         (*p != '(') && (*p != 0))
     p++;
   *res = Malloc(p-s+1);
   strncpy(*res, s, p-s);

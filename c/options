@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1999 Robin Watts/Justin Fletcher
+ * Copyright (C) 1999-2000 Robin Watts/Justin Fletcher
  */
 
 #include <stdio.h>
@@ -32,10 +32,12 @@ void Options_Init() {
   opt.help        = NULL;
   opt.helpfn      = NULL;
   opt.commands    = NULL;
+  opt.command_codesupplied = 0;
   opt.swi_base    = 0;
   opt.swi_handler = NULL;
   opt.swi_names   = NULL;
   opt.swi_decoder = NULL;
+  opt.swi_codesupplied = 0;
   opt.irqs        = NULL;
   opt.events      = NULL;
   opt.event_nums  = NULL;
@@ -61,6 +63,7 @@ void Options_Init() {
   opt.includes    = NULL;
   opt.base        = 0;
   opt.datestring  = NULL;
+  opt.cmhg        = 0; /* We're not CMHG */
 }
 
 static void help_text(void) {
@@ -89,6 +92,7 @@ Options:\n\
 -zoslib         Use '#include \"os.h\"' (OSLib) instead of '#include \"kernel.h\"'\n\
                 (Acorn) in generated C header file.\n\
 -blank          Generate a blank cmhg file to infile.\n\
+-cmhg           Give warnings for non CMHG values.\n\
 ");
 }
 
@@ -114,7 +118,7 @@ void Options_CL(int argc, char *argv[]) {
       } else {
         ErrorFatal("No filename passed with -hdr flag!");
       }
-    } else if (strncasecmp("-h", argv[i])) {
+    } else if (strncasecmp("-h", argv[i]) || strncasecmp("-help", argv[i])) {
       help_text();
       exit(EXIT_FAILURE);
     } else if (strncasecmp("-p", argv[i])) {
@@ -122,6 +126,11 @@ void Options_CL(int argc, char *argv[]) {
         ErrorFatal("-p flag used twice!");
       }
       opt.pfile=strdup(tmpnam(NULL));
+    } else if (strncasecmp("-cmhg", argv[i])) {
+      if (opt.cmhg) {
+        ErrorFatal("-cmhg flag used twice!");
+      }
+      opt.cmhg=1;
     } else if (strncasecmp("-s", argv[i])) {
       if (opt.sfile) {
         ErrorFatal("-s flag used twice!");
@@ -241,6 +250,31 @@ void Options_CheckSanity(void) {
 
   int needremoval=0;
 
+  /* CMHG only options should be warned against here */
+  if (opt.cmhg) {
+    defines_list defines;
+
+    if (opt.sfile)
+      CMHGWarning("-s specified");
+    if (opt.hdrfile)
+      CMHGWarning("-hdr specified");
+    if (opt.oslib)
+      CMHGWarning("-zoslib specified");
+    if (opt.base)
+      CMHGWarning("-zbase specified");
+    if (opt.blank)
+      CMHGWarning("-blank specified");
+
+    defines = opt.defines;
+    while (defines) {
+      if (defines->invert) {
+        CMHGWarning("-U specified");
+        break; /* Only display it once */
+      }
+      defines=defines->next;
+    }
+  }
+
   if (opt.infile == NULL)
   {
     if (opt.blank)
@@ -250,7 +284,8 @@ void Options_CheckSanity(void) {
   }
   if (!opt.blank)
   {
-    if ((opt.ofile == NULL) && (opt.sfile == NULL) && (opt.hfile == NULL))
+    if ((opt.ofile == NULL) && (opt.sfile == NULL) && (opt.hfile == NULL) &&
+        (opt.hdrfile == NULL))
       ErrorFatal("No output file specified!");
   }
   else
@@ -286,7 +321,7 @@ void Options_CheckSanityPostRead(void) {
     if (opt.swi_decoder)
       ErrorFatal("SWI decoder defined, but no SWI chunk!");
   } else {
-    if (!opt.swi_handler && !opt.swi_special)
+    if (!opt.swi_handler && !opt.swi_codesupplied)
       ErrorFatal("SWI chunk defined, but no SWI handler!");
   }
 

@@ -1,9 +1,6 @@
 /*
-  throwback.c
-
-  (c) 1998 Justin Fletcher
-  See tidy.c for the copyright notice (as original code)
-*/
+ * Copyright (C) 1999-2000 Robin Watts/Justin Fletcher
+ */
 
 #ifdef __riscos
 #include <stdlib.h>

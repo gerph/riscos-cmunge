@@ -10,4 +10,6 @@ void ErrorFatal(char *err, ...);
 
 void Warning(char *err, ...);
 
+void CMHGWarning(char *err, ...);
+
 #endif

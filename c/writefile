@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1999 Robin Watts/Justin Fletcher
+ * Copyright (C) 1999-2000 Robin Watts/Justin Fletcher
  */
 
 #include <stdio.h>
@@ -208,8 +208,59 @@ static void commands(void) {
   fprintf(file, "\tSTMIA\tr10,{r11,r12}\n");
   fprintf(file, "\tADD\tr10,r10,#&21c\n");
   fprintf(file, "\tMOV\tr11,#0\n");
-  fprintf(file, "\tIMPORT\t%s\n", opt.helpfn);
-  fprintf(file, "\tBL\t%s\n", opt.helpfn);
+  if (opt.swi_codesupplied)
+  {
+    help_list l;
+    int numcoms=0;
+
+    l = opt.commands;
+    while (l)
+    {
+      numcoms++;
+      l=l->next;
+    }
+    fprintf(file, "\tMOV\tr14,pc\n");
+    fprintf(file, "\tADD\tr14,r14,# _CMUNGE_com_ret - _CMUNGE_com_pc\n");
+    fprintf(file, "_CMUNGE_com_pc\n");
+    fprintf(file, "\tCMP\tr2,#%i\n",numcoms);
+    fprintf(file, "\tADDLT\tpc,pc,r2,LSL #2\n");
+    if (opt.helpfn)
+    {
+      fprintf(file, "\tIMPORT\t%s\n", opt.helpfn);
+      fprintf(file, "\tB\t%s\n", opt.helpfn);
+    }
+    else
+      fprintf(file, "\tB\t_CMUNGE_nocom_handler\n");
+
+    l = opt.commands;
+    while (l)
+    {
+      if (l->handler)
+      {
+        fprintf(file, "\tIMPORT\t%s\n", l->handler);
+        fprintf(file, "\tB\t%s\n", l->handler);
+      }
+      else
+      {
+        if (opt.commands)
+          fprintf(file, "\tB\t%s\n", opt.helpfn);
+        else
+          fprintf(file, "\tB\t_CMUNGE_nocom_handler\n");
+      }
+      l=l->next;
+    }
+    if (!opt.helpfn)
+    {
+      fprintf(file, "_CMUNGE_nocom_handler\n");
+      fprintf(file, "\tMOV\tr0,#0\n"); /* no error (wrong!) */
+    }
+    fprintf(file, "_CMUNGE_com_ret\n");
+  }
+  else
+  {
+    fprintf(file, "\tIMPORT\t%s\n", opt.helpfn);
+    fprintf(file, "\tBL\t%s\n", opt.helpfn);
+  }
   fprintf(file, "\tSUB\tr10,r10,#&21c\n");
   fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
   fprintf(file, "\tLDMIA\tr13!,{r1,r10,r11,r14}\n");
@@ -444,7 +495,7 @@ static void swi_handler(void) {
   fprintf(file, "\tSTMIA\tr10,{r11,r12}\n");
   fprintf(file, "\tADD\tr10,r10,#&21c\n");
   fprintf(file, "\tMOV\tr11,#0\n");
-  if (opt.swi_special)
+  if (opt.swi_codesupplied)
   {
     swi_list l;
     int numswis=0;

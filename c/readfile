@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1999 Robin Watts/Justin Fletcher
+ * Copyright (C) 1999-2000 Robin Watts/Justin Fletcher
  */
 
 #include <stdio.h>
@@ -113,8 +113,13 @@ static void preprocess(FILE *file) {
 
   /* Now we have the line in prelinebuf */
   /* Spot the preprocessor directives */
+  if (sscanf(prelinebuf," %i \"%[^\"]\"",&line,&filename)==2) {
+    opt.atline = line-1; /* GCC style */
+    Free(opt.infile);
+    opt.infile = strdup(filename);
+  }
   if (sscanf(prelinebuf,"line %i \"%[^\"]\"",&line,&filename)==2) {
-    opt.atline = line-1;
+    opt.atline = line-1; /* Norcroft style */
     Free(opt.infile);
     opt.infile = strdup(filename);
   } else {
@@ -395,7 +400,11 @@ static void read_swis(const char *s, FILE *file) {
     *l = Malloc(sizeof(*opt.swi_names));
     s = strfindpair(s, &(*l)->name, &(*l)->handler);
     if ((*l)->handler)
-      opt.swi_special=1;
+    {
+      opt.swi_codesupplied=1;
+      if (opt.cmhg)
+        CMHGWarning("handler supplied for swi %s",(*l)->name);
+    }
     l = &(*l)->next;
     s = strcomma(s);
   }
@@ -469,6 +478,7 @@ static void read_commands(const char *s, FILE *file) {
     (*l)->add_syntax     = -1;
     (*l)->invalid_syntax = NULL;
     (*l)->help_text      = NULL;
+    (*l)->handler        = NULL;
     while (*s != ')') {
       if (strprefix(s, "min-args:")) {
         if ((*l)->min_args != -1)
@@ -515,6 +525,14 @@ static void read_commands(const char *s, FILE *file) {
           ErrorFatal("help supplied twice!");
         s += strlen("help:");
         (*l)->help = 1;
+      } else if (strprefix(s, "handler:")) {
+        if ((*l)->handler != NULL)
+          ErrorFatal("handler supplied twice!");
+        s += strlen("handler:");
+        s = strduptok(s, &(*l)->handler);
+        if (opt.cmhg)
+          CMHGWarning("handler supplied for command %s",(*l)->name);
+        opt.command_codesupplied=1;
       } else if (strprefix(s, "invalid-syntax:")) {
         if ((*l)->invalid_syntax != NULL)
           ErrorFatal("invalid-syntax supplied twice!");
@@ -626,21 +644,21 @@ field_t fields[] =
       "If you declare module-is-runnable the module will be entered "
       "at the main() function in user mode (ie like a normal C program).\n"
       "You will probably never need this field."
-    } },
+    }, IN_BOTH },
 
   { "module-is-not-reentrant",     { NULL, ft_flag_off, &opt.reentrant },
     { "",
       "When your module cannot be reentered you should declare this. "
       "At present it does nothing.\n"
       "You will probably never need this field."
-    } },
+    }, IN_BOTH },
 
   { "title-string",                { NULL, ft_label,    &opt.title },
     { "ModuleName",
       "You should give your module a sensible name which describes its "
       "purpose both accurately and concisely. You must register any "
       "module names you use if they are to be distributed."
-    } },
+    }, IN_BOTH },
 
   { "help-string",                 { NULL, ft_string,   &opt.help },
     { "ModuleDescription 0.01 Tail message",
@@ -650,14 +668,14 @@ field_t fields[] =
       "title-string, and - at worst - use the same name as in the "
       "title-string. The tail message may be used to indicate a variant "
       "of the module, or a copyright string."
-    } },
+    }, IN_BOTH },
 
   { "swi-chunk-base-number",       { NULL, ft_int64,    &opt.swi_base },
     { "&1280", /* Change this to a number in the user allocatable range */
       "If you supply SWIs in your module, you must provide a base number "
       "at which these start. Each chunk is 64 entries long and must be "
       "registered if the module is going to be distributed."
-    } },
+    }, IN_BOTH },
 
   { "error-base",                  { NULL, ft_int64,    &opt.error_base },
     { "&1280", /* Make sure this is a user allocatable one too */
@@ -666,7 +684,7 @@ field_t fields[] =
       "numbers for each, starting at a base number. You should register "
       "your error bases before distributing the module. Using random "
       "error numbers is dangerous."
-    } },
+    }, IN_CMUNGE },
   { "error-chunk-base-number",     { NULL, ft_alias,   (void*)"error-base" } },
 
   { "error-identifiers",           { read_errors, ft_check, &opt.errors },
@@ -674,7 +692,7 @@ field_t fields[] =
       "Allocating error messages within the module is more efficient than "
       "doing so manually in your C code, and is less likely to pollute "
       "error number space."
-    } },
+    }, IN_CMUNGE },
 
   { "initialisation-code",         { NULL, ft_label,    &opt.init },
     { "Mod_Init",
@@ -682,7 +700,7 @@ field_t fields[] =
       "should be very careful to initialise your module safely. If anything "
       "fails, you can return an error message. Finalisation code will not "
       "be called if you return an error."
-    } },
+    }, IN_BOTH },
 
   { "finalisation-code",           { NULL, ft_label,    &opt.final },
     { "Mod_Final",
@@ -690,20 +708,20 @@ field_t fields[] =
       "do not wish to be killed then you should return an error and retain "
       "as much of the current state as possible. Causing an abort in this "
       "routine will leave a 'dead' module in the chain."
-    } },
+    }, IN_BOTH },
 
   { "international-help-file",     { NULL, ft_quoted,   &opt.mfile },
     { "\"Resources:$.ThirdParty.ModuleName.Messages\"",
       "Syntax and help messages may be internationalised by using a messages "
       "file."
-    } },
+    }, IN_BOTH },
 
   { "swi-handler-code",            { NULL, ft_label,    &opt.swi_handler },
     { "Mod_SWI",
       "The SWI handler is entered for every SWI the module provides. "
       "Generally, this is a switch statement, to dispatch each of the SWIs "
       "that are known."
-    } },
+    }, IN_BOTH },
 
   { "swi-decoding-code",           { read_swidec },
     { "Mod_SWIDecoder",
@@ -711,7 +729,7 @@ field_t fields[] =
       "translations for this module. In practice, you very rarely need to "
       "use this.\n"
       "You will probably never need this field."
-    } },
+    }, IN_BOTH },
 
   { "swi-decoding-table",          { read_swis },
     { "Prefix One Two Three",
@@ -721,7 +739,7 @@ field_t fields[] =
       "obvious variant. You should register your SWI prefixes when you "
       "register a SWI chunk. Each name entry may be followed by /<entry> "
       "to use a particular routine to handle a SWI.\n"
-    } },
+    }, IN_BOTH },
 
   { "library-init-code",           { NULL, ft_label,    &opt.lib_init },
     { "_clib_initialisemodule",
@@ -731,7 +749,7 @@ field_t fields[] =
       "_clib_initialisemodule prior to returning, or provide an identical "
       "functionality.\n"
       "You will probably never need this field."
-    } },
+    }, IN_BOTH },
   { "library-initialisation-code", { NULL, ft_alias, (void*)"library-init-code"} },
 
   { "date-string",                 { NULL, ft_string,   &opt.datestring },
@@ -741,7 +759,7 @@ field_t fields[] =
       "ports from other platforms may wish to indicate their source base "
       "date using this field.\n"
       "You will probably never need this field."
-    } },
+    }, IN_BOTH },
 
   { "generic-veneers",            { read_generics, ft_check, &opt.generics },
     { "Veneer_Entry/Veneer_Call",
@@ -749,7 +767,7 @@ field_t fields[] =
       "and IRQ modes. You should register the Entry routine as the external "
       "interface (ie provide it as the code address to call). The Call "
       "routine will be called from this."
-    } },
+    }, IN_BOTH },
 
   { "irq-handlers",                { read_irqs,     ft_check, &opt.irqs },
     { "IRQ_Entry/IRQ_Call",
@@ -758,7 +776,7 @@ field_t fields[] =
       "interface (ie provide it as the code address to call). The Call "
       "routine will be called from this. You can return 0 or 1 from your "
       "routine to say you either handled the interrupt, or did not."
-    } },
+    }, IN_BOTH },
 
   { "vector-handlers",             { read_vectors,  ft_check, &opt.vectors },
     { "Vector_Entry/Vector_Call",
@@ -767,7 +785,7 @@ field_t fields[] =
       "interface (ie provide it as the code address to call). The Call "
       "routine will be called from this. You can return 0 or 1 from your "
       "routine to say you either handled the interrupt, or did not."
-    } },
+    }, IN_BOTH },
 
   { "event-handler",               { read_events,   ft_check, &opt.events },
     {
@@ -780,7 +798,7 @@ field_t fields[] =
       "list of numbers at the end of the line indicates which events (in "
       "R0) will be passed to the Call routine. You can also trap upcalls "
       "with an event handler, as their reason codes are also passed in R0."
-    } },
+    }, IN_BOTH },
 
   { "command-keyword-table",       { read_commands },
     { "Mod_Command\n   ModuleCommand()",
@@ -803,7 +821,7 @@ field_t fields[] =
       "                        message processing. Not implemented\n"
       "  help-text: <string>   The text/token to use for *Help\n"
       "  invalid-syntax: <string>  The text/token to use for syntax errors"
-    } },
+    }, IN_BOTH },
 
   { "service-call-handler",        { read_services },
     {
@@ -811,7 +829,7 @@ field_t fields[] =
       "The module service entry will be called to process services. You "
       "are strongly recommended to include the numbers of the services "
       "you wish to handle."
-    } },
+    }, IN_BOTH },
 
   { NULL } /* zero terminated end of list */
 };
@@ -844,11 +862,18 @@ static void parse_line(FILE *file) {
       field=fields;
       while (field->name && !strncasecmp(field->name,line))
         field++;
-      if (field==NULL)
-        ErrorFatal("Unknown command: '%s'\n", line);
+      if (field->name==NULL)
+        ErrorFatal("Unknown field: '%s'", line);
       if (field->values.type==ft_alias)
         line=(char *)field->values.value; /* It's an alias */
     } while (field->values.type==ft_alias);
+
+    if (field->hgtype==0)
+      ErrorFatal("%s isn't supported by any header generator (programmer error)",field->name);
+    if (!(field->hgtype & IN_CMUNGE))
+      ErrorFatal("%s isn't supported by CMunge",field->name);
+    if (!(field->hgtype & IN_CMHG) && (opt.cmhg))
+      CMHGWarning("%s used",field->name);
 
     if (field->values.func)
     { /* We have a function for special processing of this field, so we
@@ -979,8 +1004,8 @@ void ReadFile(void) {
     }
     if (opt.throwback)
       bufend += sprintf(bufend," -throwback");
-/*    if (opt.dfile)
-      bufend += sprintf(bufend," -depend %s", opt.dfile); */
+    if (opt.dfile)
+      bufend += sprintf(bufend," -depend %s", opt.dfile);
     rc = system(buf);
     switch(rc) {
       case 0: /* All ok */

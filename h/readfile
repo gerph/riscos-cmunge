@@ -25,8 +25,18 @@ typedef enum
   ft_check     /* Special case for functions; should check the value is 0 */
 } fieldtype;
 
+#define IN_CMHG   (1)
+#define IN_CMUNGE (2)
+#define IN_BOTH   (IN_CMHG | IN_CMUNGE)
+
+typedef enum
+{
+  in_cmhg,
+  in_both
+} intype;
+
 typedef struct {
-  char *name;      /* The name of this field */
+  char *name;        /* The name of this field */
   struct {
     field_f func;    /* Function to call to process this, or NULL if none */
     fieldtype type;  /* What type of entry this is, if no function */
@@ -37,6 +47,7 @@ typedef struct {
     char *value;     /* The default vaue to give it, or NULL to comment it */
     char *comment;   /* The comment to preceed it */
   } blank;
+  int hgtype;        /* Which header generator it is in */
 } field_t;
 
 extern field_t fields[]; /* This declares all the fields we know */

@@ -72,16 +72,16 @@ OMC_FILES = \
 LIBS = C:o.stubs
 
 # Final targets:
-Most: @.^.cmunge
+Most: @.cmunge
 
-All: @.^.cmunge @.cmungeM
+All: @.cmunge @.cmungeM
 
-Examples: @.^.cmunge
-        -@.^.examples.!Make
-        Dir @.^.src
+Examples: @.cmunge
+        -@.examples.!Make
+        Dir @.src
 
-@.^.cmunge: @.cmungeU
-	Squeeze @.cmungeU @.^.cmunge
+@.cmunge: @.cmungeU
+	Squeeze @.cmungeU @.cmunge
 
 @.cmungeU: $(OC_FILES) $(OS_FILES)
 	link $(linkflags) $(OC_FILES) $(OS_FILES) $(LIBS) \
@@ -96,33 +96,33 @@ clean:
 	-wipe @.o.* ~C ~V R F
 	-wipe @.om.* ~C ~V R F
 
-release: @.^.cmunge
+release: @.cmunge
         @echo Source release
-        cdir @.^.ReleaseSrc
-        wipe @.^.ReleaseSrc ~C~VR
-        cdir @.^.ReleaseSrc
-        cdir @.^.ReleaseSrc.Examples
-        cdir @.^.ReleaseSrc.Examples.cmhg
-        cdir @.^.ReleaseSrc.Examples.h
-        cdir @.^.ReleaseSrc.Examples.hdr
-        cdir @.^.ReleaseSrc.Examples.inc
-        cdir @.^.ReleaseSrc.Examples.o
-        cdir @.^.ReleaseSrc.Examples.s
-        copy @.^.Docs          @.^.ReleaseSrc.Docs ~C~VR
-        copy @.^.Examples.!*   @.^.ReleaseSrc.Examples.* ~C~VR
-        copy @.^.Examples.inc  @.^.ReleaseSrc.Examples.inc ~C~VR
-        copy @.^.Examples.cmhg @.^.ReleaseSrc.Examples.cmhg ~C~VR
-        copy @.^.Src           @.^.ReleaseSrc.Src ~C~VR
-        -wipe @.^.ReleaseSrc.Src.o.* ~C~VR
-        -wipe @.^.ReleaseSrc.Src.om.* ~C~VR
-        remove @.^.ReleaseSrc.Src.cmungeU
-        copy @.^.cmunge        @.^.ReleaseSrc.cmunge ~C~VR
+        cdir @.ReleaseSrc
+        wipe @.ReleaseSrc ~C~VR
+        cdir @.ReleaseSrc
+        cdir @.ReleaseSrc.Examples
+        cdir @.ReleaseSrc.Examples.cmhg
+        cdir @.ReleaseSrc.Examples.h
+        cdir @.ReleaseSrc.Examples.hdr
+        cdir @.ReleaseSrc.Examples.inc
+        cdir @.ReleaseSrc.Examples.o
+        cdir @.ReleaseSrc.Examples.s
+        copy @.Docs          @.ReleaseSrc.Docs ~C~VR
+        copy @.Examples.!*   @.ReleaseSrc.Examples.* ~C~VR
+        copy @.Examples.inc  @.ReleaseSrc.Examples.inc ~C~VR
+        copy @.Examples.cmhg @.ReleaseSrc.Examples.cmhg ~C~VR
+        copy @.Src           @.ReleaseSrc.Src ~C~VR
+        -wipe @.ReleaseSrc.Src.o.* ~C~VR
+        -wipe @.ReleaseSrc.Src.om.* ~C~VR
+        remove @.ReleaseSrc.Src.cmungeU
+        copy @.cmunge        @.ReleaseSrc.cmunge ~C~VR
         @echo Binary release
-        cdir @.^.ReleaseBin
-        wipe @.^.ReleaseBin ~C~VR
-        cdir @.^.ReleaseBin
-        copy @.^.Docs          @.^.ReleaseBin.Docs ~C~VR
-        copy @.^.cmunge        @.^.ReleaseBin.cmunge ~C~VR
+        cdir @.ReleaseBin
+        wipe @.ReleaseBin ~C~VR
+        cdir @.ReleaseBin
+        copy @.Docs          @.ReleaseBin.Docs ~C~VR
+        copy @.cmunge        @.ReleaseBin.cmunge ~C~VR
         dir ^
         zip -r -9 BinCMunge/zip ReleaseBin
         zip -r -9 SrcCMunge/zip ReleaseSrc
