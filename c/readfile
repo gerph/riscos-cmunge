@@ -196,10 +196,10 @@ static char *getline(FILE *file) {
                   insert('"');
                 }
                 comma = 0;
-  	      } else {
+              } else {
                 insert('\\');
                 insert('"');
-      	        concat = 0;
+                concat = 0;
                 comma = 0;
               }
             }
@@ -226,7 +226,7 @@ static char *getline(FILE *file) {
                 comma = 0;
                 concat = 0;
               }
-  	  }
+          }
           } else if (c == 'v') {
             if (!discarding) {
               if (escape) {
@@ -399,7 +399,7 @@ static void read_swis(const char *s, FILE *file) {
   //if (*s == 0)
   //  ErrorFatal("SWI prefix supplied, but no SWI names!");
   while (*s != 0) {
-    *l = Malloc(sizeof(*opt.swi_names));
+    *l = Malloc(sizeof(**l));
     s = strfindpair(s, &(*l)->name, &(*l)->handler);
     if ((*l)->handler)
     {
@@ -648,6 +648,12 @@ static void read_vectors(const char *s, FILE *file)
   read_handlers(s, &opt.vectors);
 }
 
+static void read_vector_traps(const char *s, FILE *file)
+{
+  UNUSED(file);
+  read_handlers(s, &opt.vector_traps);
+}
+
 static void read_runnable(const char *s, FILE *file)
 {
   UNUSED(file);
@@ -859,7 +865,7 @@ field_t fields[] =
       "to use a particular routine to handle a SWI.\n"
     }, IN_BOTH },
 
-  { "library-init-code",           { NULL, ft_label,    &opt.lib_init },
+  { "library-enter-code",          { NULL, ft_label,    &opt.lib_init },
     { "_clib_initialisemodule",
       "The library initialisation code sets up the C environment for use "
       "with this module. You may wish to perform some initialisation prior "
@@ -868,7 +874,7 @@ field_t fields[] =
       "functionality.\n"
       "You will probably never need this field."
     }, IN_BOTH },
-  { "library-initialisation-code", { NULL, ft_alias, (void*)"library-init-code"} },
+  { "library-initialisation-code", { NULL, ft_alias, (void*)"library-enter-code"} },
 
   { "date-string",                 { NULL, ft_string,   &opt.datestring },
     { "21 Dec 1999",
@@ -902,8 +908,20 @@ field_t fields[] =
       "and IRQ modes. You should register the Entry routine as the external "
       "interface (ie provide it as the code address to call). The Call "
       "routine will be called from this. You can return 0 or 1 from your "
-      "routine to say you either handled the interrupt, or did not."
+      "routine to say you either handled the vector, or did not."
     }, IN_BOTH },
+
+  { "vector-traps",                { read_vector_traps,  ft_check, &opt.vector_traps },
+    { "VectorTrap_Entry/VectorTrap_Call",
+      "VectorTrap veneers are used to provide a simple C environment for SVC "
+      "and IRQ modes. You should register the Entry routine as the external "
+      "interface (ie provide it as the code address to call). The Call "
+      "routine will be called from this. You can an error to pass this back "
+      "to the calling. The function 'trap' can be called with a register "
+      "block and private value to pass the call on to the vector. The trap "
+      "function will return registers in the supplied block, and if an error "
+      "is flagged this will be the return value."
+    }, IN_CMUNGE },
 
   { "event-handler",               { read_events,   ft_check, &opt.events },
     {

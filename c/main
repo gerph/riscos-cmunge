@@ -16,6 +16,8 @@
 #include "datestamp.h"
 #include "blank.h"
 
+#include "copyright.h"
+
 #include "VersionNum"
 
 int main(int argc, char *argv[]) {
@@ -25,7 +27,7 @@ int main(int argc, char *argv[]) {
 
   file_init(); /* Initialise file tidy up library */
 
-  printf("CMunge " Module_FullVersionAndDate "\nCopyright (C) 1999-2000 Robin Watts/Justin Fletcher\n");
+  printf("CMunge " Module_FullVersionAndDate "\n" Copyright_CMunge "\n");
   /* If you alter this code, insert a printf here to say that you have */
 #if 0
   printf("The following modifications made by Justin Fletcher\n");
@@ -40,7 +42,7 @@ int main(int argc, char *argv[]) {
   printf("  * Added -blank generation\n");
   printf("  * Error messages included in header\n");
   printf("  * SWI handler extensions\n");
-  printf("  * Fixed -hdr output to work without output file\n");
+  printf("  * Fixed -xhdr output to work without output file\n");
   printf("  * Corrected throwback handling\n");
   printf("  * Added code handler routines\n");
   printf("  * Removed 'strint' closing parentheses check\n");
@@ -51,6 +53,7 @@ int main(int argc, char *argv[]) {
   printf("  * Command line parser updated to cope with rogue commas\n");
   printf("  * SWI chunk base must not have x-bit set\n");
   printf("  * error-chunk-base-number can have any alignment\n");
+  printf("  * Added vector-traps support\n");
 #endif
   Options_Init();
   Options_CL(argc, argv);

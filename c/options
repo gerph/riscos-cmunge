@@ -39,6 +39,7 @@ void Options_Init() {
   opt.lib_init    = NULL;
   opt.generics    = NULL;
   opt.vectors     = NULL;
+  opt.vector_traps = NULL; /* vectors which can be post processed */
   opt.ofile       = NULL; /* AOF output */
   opt.sfile       = NULL; /* Assembler output */
   opt.pfile       = NULL; /* Pre-processor output */
@@ -61,6 +62,7 @@ void Options_Init() {
   /* Export files */
   opt.x_hdr       = NULL;
   opt.x_h         = NULL;
+  opt.bitness     = bitness_26;
 }
 
 static void help_text(void) {
@@ -92,6 +94,8 @@ Options:\n\
                 (Acorn) in generated C header file.\n\
 -blank          Generate a blank cmhg file to infile.\n\
 -cmhg           Give warnings for non CMHG values.\n\
+-32bit          Generate 32-bit code (not implemented).\n\
+-26bit          Generate 26-bit code (default).\n\
 ");
 }
 
@@ -251,6 +255,10 @@ void Options_CL(int argc, char *argv[]) {
       } else {
         ErrorFatal("Unknown tweak option -z");
       }
+    } else if (strcmp("-32bit", argv[i])==0) { /* case sensitive */
+      opt.bitness=bitness_32;
+    } else if (strcmp("-26bit", argv[i])==0) { /* case sensitive */
+      opt.bitness=bitness_26;
     } else {
       if (opt.infile) {
         ErrorFatal("Unknown flag/Only specify one input file: %s", argv[i]);
@@ -307,6 +315,10 @@ void Options_CheckSanity(void) {
     if (! ((opt.ofile == NULL) && (opt.sfile == NULL) && (opt.hfile == NULL)))
       ErrorFatal("Output files specified with blank template!");
   }
+
+  if (opt.bitness==bitness_32)
+    ErrorFatal("CMunge does not support 32bit code generation yet");
+
   /* We need a temporary file for the assembler */
   if (opt.sfile==NULL) {
     opt.sfile=file_temp();

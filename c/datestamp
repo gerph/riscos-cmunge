@@ -24,7 +24,7 @@ void DateStamp(void) {
 
   i = 32;
   if (opt.datestring)
-    i = 4 + strlen(opt.datestring);
+    i = 4 + strlen(opt.datestring)+1;
   date0 = date = Malloc(strlen(opt.help)+i);
   s = opt.help;
 

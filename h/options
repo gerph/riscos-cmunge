@@ -100,6 +100,10 @@ typedef struct {
     run_rmaapp_simple  /* Set up a simple application with RMA stack - note
                           that this is exceptionally experimental */
   } runnable;	                /* module-is-runnable */
+  enum {
+    bitness_26,
+    bitness_32
+  } bitness;
   int           reentrant;	/* module-is-not-reentrant */
   char         *service;	/* service-call-handler */
   int_list      services;	/* service-call-handler */
@@ -122,6 +126,7 @@ typedef struct {
   char         *final;		/* finalisation-code */
   handler_list  generics;	/* generic-veneers */
   handler_list	vectors;	/* vector-handlers */
+  handler_list	vector_traps;	/* vector-traps */
   error_list    errors;         /* error-identifiers */
   int           errors_special; /* errors have been given numbers */
   int           version;
