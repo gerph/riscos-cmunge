@@ -223,11 +223,18 @@ const char *strint(const char *s, unsigned int *i) {
   /* Now skip closing parens etc */
   while ((*s) && (isspace(*s) || (*s == ')'))) {
     if (*s == ')')
+    {
+      if (paren==0)
+        break;
       paren--;
+    }
     s++;
   }
-  if (paren < 0)
-    ErrorFatal("Too many closing parentheses!");
+  /* JRF: Too many closing parentheses may be a valid situation /iff/ you have
+          thing(16) - obviously that's a valid situation to have a closing
+          bracket at the end */
+  /* if (paren < 0) */
+    /* ErrorFatal("Too many closing parentheses!"); */
   if (paren > 0)
     ErrorFatal("Mismatched closing parentheses!");
   return s;

@@ -146,6 +146,7 @@ static char *getline(FILE *file) {
   escape = 0;
   concat = 0;
   linestart = 1;
+
   while (!Feof(file) && (!done)) {
     while (!Feof(file) && (isspace(c))) {
       if (c=='\n') {
@@ -270,7 +271,7 @@ static char *getline(FILE *file) {
               concat = 0;
               level--;
               if (level < 0)
-                ErrorFatal("Too many closing parentheses!");
+                ErrorFatal("Too many closing parentheses (%i)!",level);
             }
           } else if (c == ';') {
             /* Discard to end of line */
@@ -421,8 +422,9 @@ static void read_errors(const char *s, FILE *file) {
     s = strduptok(s, &(*l)->name);
     s = strskip(s, '(');
     (*l)->message        = NULL;
+    (*l)->number         = -1;
     while (*s != ')') {
-      if (strprefix(s, "\"")) {
+      if (*s=='\"') {
         if ((*l)->message != NULL)
           ErrorFatal("error message for %s supplied twice!",(*l)->name);
         s = strstring(s, &(*l)->message);
@@ -433,13 +435,21 @@ static void read_errors(const char *s, FILE *file) {
             s++;
         }
       } else {
-        ErrorFatal("Unknown argument in error-identifiers: %s", s);
-        break;
+        /* It /must/ be a number, otherwise we don't know it */
+        if ((*l)->number!=-1)
+          ErrorFatal("error number for %s supplied twice!",(*l)->name);
+
+        s = strint(s, (unsigned int *)&(*l)->number);
+        opt.errors_special=1;
+        /* ErrorFatal("Unknown argument in error-identifiers: %s", s); */
+        /* break; */
       }
       s = strcomma(s);
     }
     if ((*l)->message     == NULL)
       ErrorFatal("Missing error message in %s",(*l)->name);
+    if ((*l)->number      == -1)
+      (*l)->number = 0;
 
     s = strskip(s, ')');
     s = strcomma(s);
@@ -636,10 +646,110 @@ static void read_vectors(const char *s, FILE *file)
   read_handlers(s, &opt.vectors);
 }
 
+static void read_runnable(const char *s, FILE *file)
+{
+  UNUSED(file);
+  UNUSED(s);
+  switch (opt.runnable)
+  {
+    case run_none:
+      opt.runnable=run_clib;
+      break;
+
+    case run_blib:
+      break; /* We've already specified it on the CLI, this just confirms */
+
+    case run_clib:
+    default:
+      ErrorFatal("module-is-runnable cannot be supplied twice!");
+  }
+
+  while (*s != 0) {
+    /* Please not that simple-app === run_rmaapp_simple and is a VERY
+       experimental feature. It gives you an application with an equivilent
+       entry sequence to that of ShareFS. It does NOT make the application
+       multiply threadable in user mode. It does NOT handle any exceptions
+       or other environment handlers. It does NOT provide a useful context
+       for anything other than writing a very simple Wimp application. This
+       is all it is intended for. To use it for anything else would be very
+       unwise. I've spent pretty much all day working on this and trying to
+       get my head around a way to do the whole thing safely. The simple
+       answer is that it's impossible to do properly under the current
+       implementation of RISCOS without some collusion over the taskhandles
+       which I'm unwilling to incorporate because it means that some
+       knowledge of the environment is required and it /still/ won't cope
+       with a multiply threaded single-tasked module. There are a number of
+       issues here :
+
+        1 You must be able to create a stack in RMA of arbitrary size for
+          the currently entered task
+        2 You must be able to remove this stack on module kill, and for
+          preference, disable the application that relies on it.
+        3 You must be able to trap errors, exceptions and exits and remove
+          the stack prior to returning to the previous application.
+        4 Each application must be able to have its own C context such that
+          exceptions can be restored correctly
+        5 You must, on the external death of the application using the stack,
+          be able to remove the stack without it having exited in any manner.
+        6 Stacks should be extensible.
+
+       Which requires :
+        1 An entry sequence similar to that provided here.
+        2 A list of all stacks must be maintained for freeing on exit.
+        3 Handlers must be aware of the existance of multiple RMA stacks
+          which are unrelated to one another but freeable at the instance
+          of their calls.
+        4 C contexts can be copied from the base area, with the actual state
+          stored at the base of the stack (or linked off it). This should
+          work. The SCL static data living there cannot be accessed off the
+          main SVC entry points. This should not be an issue.
+        5 Requires an associated handle for each application started such
+          that its stacks can be removed. This requires some knowledge of
+          how applications are identified. At present it is not possible to
+          do this with any accuracy because of the way in which applications
+          are not tasks. It is intended that this issue be ignored for the
+          simplification of the system
+        6 Stack extension handled by the SCL should occur seamlessly and
+          without special support. Freeing multiple stacks should work.
+
+       This implementation has :
+        1 Fulfilled.
+        2 Only one stack can exist, so this is fulfilled to that extent.
+        3 Any error, exception or exit is handled by the parent handler - no
+          handlers are installed. Memory leaks are likely.
+        4 Ignored - main C context used. As only one stack is present, this
+          is not an issue.
+        5 Ignored, as per requirements
+        6 Ignored. No idea what happens on attempted stack extension. Examine
+          this.
+
+       Consequently, this implementation is only useful for SIMPLE
+       applications which cannot be re-threaded.
+    */
+    if (strprefix(s, "simple-app:")) {
+      opt.runnable=run_rmaapp_simple; /* Experimental */
+      s += strlen("simple-app:");
+    } else if (Feof(file)) {
+      ErrorFatal("Ran out of file when parsing command details!");
+      break;
+    } else if (*s == 0) {
+      while ((*s == 0) && !Feof(file)) {
+        s = getline(file);
+        while (isspace(*s) && (!Feof(file)))
+          s++;
+      }
+    } else {
+      ErrorFatal("Unknown argument in command-description: %s", s);
+      break;
+    }
+    s = strcomma(s);
+  }
+}
+
 
 field_t fields[] =
 {
-  { "module-is-runnable",          { NULL, ft_flag_on,  &opt.runnable },
+  { "module-is-runnable",          { read_runnable },
     { "",
       "If you declare module-is-runnable the module will be entered "
       "at the main() function in user mode (ie like a normal C program).\n"
@@ -688,10 +798,11 @@ field_t fields[] =
   { "error-chunk-base-number",     { NULL, ft_alias,   (void*)"error-base" } },
 
   { "error-identifiers",           { read_errors, ft_check, &opt.errors },
-    { "err_Silly(\"Silly\")",
+    { "err_Silly(&1234,\"Silly\")",
       "Allocating error messages within the module is more efficient than "
       "doing so manually in your C code, and is less likely to pollute "
-      "error number space."
+      "error number space. The number is optional, and if omitted will be "
+      "allocated from the error chunk."
     }, IN_CMUNGE },
 
   { "initialisation-code",         { NULL, ft_label,    &opt.init },

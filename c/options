@@ -24,7 +24,7 @@ static void Options_RemoveFiles(void) {
 
 void Options_Init() {
 
-  opt.runnable    = 0;
+  opt.runnable    = run_none;
   opt.reentrant   = 1;
   opt.service     = NULL;
   opt.services    = NULL;
@@ -64,6 +64,8 @@ void Options_Init() {
   opt.base        = 0;
   opt.datestring  = NULL;
   opt.cmhg        = 0; /* We're not CMHG */
+  opt.errors      = NULL;
+  opt.errors_special = 0;
 }
 
 static void help_text(void) {
@@ -82,6 +84,7 @@ Options:\n\
 -d <file>       Name a C header file that CMunge will generate.\n\
 -hdr <file>     Name a Assembler header file that CMunge will generate.\n\
 -p              Pre-process the file with cpp before parsing.\n\
+"/*-b              Use _blib_entermodule instead of SCL version\n\ */"\
 -I<directory>   Include <directory> on the #include search path.\n\
 -D<symbol>=<value>\n\
 -D<symbol>      Define <symbol> on entry to the preprocessor.\n\
@@ -151,6 +154,11 @@ void Options_CL(int argc, char *argv[]) {
       } else {
         ErrorFatal("No filename passed with -o flag!");
       }
+    } else if (strncasecmp("-b", argv[i])) {
+      if (opt.runnable) {
+        ErrorFatal("-b flag used twice!");
+      }
+      opt.runnable=run_blib;
     } else if (strncasecmp("-depend", argv[i])) {
       if (opt.dfile) {
         ErrorFatal("-depend flag used twice!");
@@ -325,6 +333,6 @@ void Options_CheckSanityPostRead(void) {
       ErrorFatal("SWI chunk defined, but no SWI handler!");
   }
 
-  if (opt.errors && opt.error_base == 0)
+  if (opt.errors && opt.error_base == 0 && !opt.errors_special)
     ErrorFatal("Errors defined, but no error base");
 }

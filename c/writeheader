@@ -399,7 +399,12 @@ static void errors(void) {
 /* Error messages embedded in header, based at &%x */\n",errnum);
     while (l)
     {
-      fprintf(file,"extern void __err_%s(void); /* &%x */\n",l->name,errnum++);
+      int num;
+      if (l->number)
+        num=l->number;
+      else
+        num=errnum++;
+      fprintf(file,"extern void __err_%s(void); /* &%x */\n",l->name,num);
       l = l->next;
     }
     l=opt.errors;
@@ -459,7 +464,7 @@ void WriteHeader(void) {
   if (opt.base)
     fprintf(file, "extern int Image__RO_Base;\n\n");
 
-  if (opt.runnable)
+  if (opt.runnable == run_clib)
     mainp();
   if (opt.init)
     init();

@@ -6,9 +6,9 @@
 
 #define OPTIONS_H
 
-#define VERSION     "0.13"
-#define VERSION_NUM "13"
-#define DATE    "29 Dec 1999"
+#define VERSION     "0.14"
+#define VERSION_NUM "14"
+#define DATE    "06 Feb 2000"
 
 /* List of integers */
 
@@ -76,6 +76,7 @@ typedef struct error_list_s *error_list;
 typedef struct error_list_s {
   char         *name;
   char         *message;
+  unsigned int number; /* 0 to auto-allocate, number for an explicit number */
   error_list  next;
 } error_list_s;
 
@@ -92,7 +93,13 @@ typedef struct defines_list_s {
 /* Main module structure */
 
 typedef struct {
-  int           runnable;	/* module-is-runnable */
+  enum {
+    run_none,
+    run_blib, /* Call _blib_entermodule - obsolete feature of CMHG */
+    run_clib, /* Call _clib_entermodule */
+    run_rmaapp_simple  /* Set up a simple application with RMA stack - note
+                          that this is exceptionally experimental */
+  } runnable;	                /* module-is-runnable */
   int           reentrant;	/* module-is-not-reentrant */
   char         *service;	/* service-call-handler */
   int_list      services;	/* service-call-handler */
@@ -116,6 +123,7 @@ typedef struct {
   handler_list  generics;	/* generic-veneers */
   handler_list	vectors;	/* vector-handlers */
   error_list    errors;         /* error-identifiers */
+  int           errors_special; /* errors have been given numbers */
   int           version;
   char         *date;
   char         *datestring;     /* User supplied date string */

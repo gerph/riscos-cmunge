@@ -37,6 +37,9 @@ int main(int argc, char *argv[]) {
   printf("  * Fixed -hdr output to work without output file\n");
   printf("  * Corrected throwback handling\n");
   printf("  * Added code handler routines\n");
+  printf("  * Removed 'strint' closing parentheses check\n");
+  printf("  * Added support for -b for obsolete CMHG feature\n");
+  printf("  * module-is-not-re-entrant now works\n");
 #endif
   Options_Init();
   Options_CL(argc, argv);

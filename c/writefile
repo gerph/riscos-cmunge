@@ -390,8 +390,100 @@ static void start(void) {
 
   if (opt.runnable) {
     fprintf(file, "_CMUNGE_start\n");
-    fprintf(file, "\tIMPORT\t_clib_entermodule\n");
-    fprintf(file, "\tB\t_clib_entermodule\n");
+    switch (opt.runnable)
+    {
+      case run_blib:
+      case run_clib:
+        {
+          char *routine;
+          if (opt.runnable == run_blib)
+            routine="_blib_entermodule";
+          else
+            routine="_clib_entermodule";
+
+          fprintf(file, "\tIMPORT\t%s\n",routine);
+          fprintf(file, "\tB\t%s\n",routine);
+        }
+        break;
+
+      case run_rmaapp_simple: /* an incredibly simple task using RMA space */
+        fprintf(file,"\
+OS_Module * 30\n\
+OS_Exit * 17\n\
+OS_GenerateError * 43\n\
+\n\
+\tIMPORT\t|__root_stack_size|, WEAK\n\
+\tIMPORT\tmain\n\
+\tIMPORT\t|_Lib$Reloc$Off$DP|\n\
+\tEXPORT\t_CMUNGE_stack\n\
+\tMOV\tv1,r0 \t; Save command tail\n\
+\tLDR\tr12,[r12]\t; Workspace ptr from private word\n\
+\tLDMIB\tr12,{v2,v3}\t; Module relocations\n\
+\tLDR\tv4,_CMUNGE_stackptr\t; A Ptr to stack variable\n\
+\tADD\tv4,v4,v3\t; gets relocated for user variable\n\
+\tLDR\tr0,[v4]\t; stack chunk\n\
+\tTEQ\tr0,#0\t; is it 0 ?\n\
+\tBNE\t_CMUNGE_apprunning\t; if not, there's a stack already\n\
+\tMOV\tr0,#6\n\
+\tLDR\tr3, =|__root_stack_size|\n\
+\tTEQ\tr3, #0\n\
+\tMOVEQ\tr3,#8192\t; default stack size\n\
+\tSWI\tOS_Module\n\
+\tMOV\tsl,r2\n\
+\tSTR\tsl,[v4]\n\
+\tADD\tsp,sl,r3\n\
+\tSTMIA\tsl,{v2,v3}\n\
+\n\
+\t; This is equivalent of 'ADD r10, r10, #0' + |_Lib$Reloc$Off$DP|\n\
+\tDCD\t|_Lib$Reloc$Off$DP| + &E28AA000\n\
+\n\
+\tMOV\tfp,#0\n\
+\tMOV\ta1,v1\n\
+\tBL\tmain\n\
+\n\
+\t; This is equivalent of 'SUB r10, r10, #0' + |_Lib$Reloc$Off$DP|\n\
+\tDCD\t|_Lib$Reloc$Off$DP| + &E24AA000\n\
+\n\
+\tMOV\tv1,r0\n\
+\n\
+\tMOV\tr2,sl\n\
+\tMOV\tr0,#7\n\
+\tSWI\tOS_Module\n\
+\tMOV\tr0,#0\n\
+\tSTR\tr0,[v4]\n\
+\n\
+\tMOV\tr0,v1\t; FIXME: this is wrong - it's ShareFS code\n\
+\tSWI\tOS_Exit\n\
+\n\
+_CMUNGE_freeappstack\n\
+\tSTMFD\tsp!,{r0-r4,r14}\n\
+\tLDR\tr4,_CMUNGE_stackptr\t; A Ptr to stack variable\n\
+\tLDR\tr3,[sl,#-536]\n\
+\tADD\tr4,r4,r3\t; gets relocated for user variable\n\
+\tLDR\tr2,[r4]\t; stack chunk pointer\n\
+\tTEQ\tr2,#0\t; is it allocated ?\n\
+\tMOVNE\tr0,#7\t; if so, free it\n\
+\tSWINE\tOS_Module\n\
+\tMOV\tr0,#0\n\
+\tSTR\tr0,[r4]\n\
+\tLDMFD\tsp!,{r0-r4,pc}^\n\
+\n\
+_CMUNGE_stackptr\n\
+\tDCD\t_CMUNGE_stack\n\
+\n\
+_CMUNGE_apprunning\n\
+\tADR\tr0,_CMUNGE_apprunning_error\n\
+\tSWI\tOS_GenerateError\n\
+_CMUNGE_apprunning_error\n\
+\tDCD 0\t; FIXME: This is a bad error number to use\n\
+\t= \"%s already running\",0\n\
+\tALIGN\n\
+",opt.title);
+        break;
+
+      default:
+        ErrorFatal("Start code type confusion");
+    }
   }
 }
 
@@ -400,7 +492,7 @@ static void init(void) {
   fprintf(file, "\n\tALIGN\n");
   fprintf(file, "_CMUNGE_init\n");
   fprintf(file, "\tSTMFD\tr13!,{r7-r11,r14}\n");
-  fprintf(file, "\tMOV\tr0,#1\n");
+  fprintf(file, "\tMOV\tr0,#%i\n",opt.reentrant ? 1 : 0);
   if (opt.lib_init) {
     fprintf(file, "\tIMPORT\t%s\n", opt.lib_init);
     fprintf(file, "\tBL\t%s\n", opt.lib_init);
@@ -453,6 +545,8 @@ static void final(void) {
     fprintf(file, "\tLDREQ\tr0,[r13,#0x14]\n");
     fprintf(file, "\tIMPORT\t_clib_finalisemodule\n");
     fprintf(file, "\tBLEQ\t_clib_finalisemodule\n");
+    if (opt.runnable == run_rmaapp_simple)
+      fprintf(file,"\tBLEQ\t_CMUNGE_freeappstack\n");
     fprintf(file, "\tSUB\tr10,r10,#&21c\n");
     fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
     fprintf(file, "\tLDMEQIA\tr13!,{r7-r12,pc}^\n");
@@ -471,6 +565,8 @@ static void final(void) {
     fprintf(file, "\tMOV\tr11,#0\n");
     fprintf(file, "\tIMPORT\t_clib_finalisemodule\n");
     fprintf(file, "\tBL\t_clib_finalisemodule\n");
+    if (opt.runnable == run_rmaapp_simple)
+      fprintf(file,"\tBL\t_CMUNGE_freeappstack\n");
     fprintf(file, "\tSUB\tr10,r10,#&21c\n");
     fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
     fprintf(file, "\tLDMIA\tr13!,{r7-r11,pc}^\n");
@@ -765,7 +861,10 @@ static void errors(void) {
   {
     fprintf(file,"\tEXPORT\t__err_%s\n",l->name);
     fprintf(file,"__err_%s\n",l->name);
-    fprintf(file,"\tDCD\t&%08x\n",error++);
+    if (l->number)
+      fprintf(file,"\tDCD\t&%08x\n",l->number);
+    else
+      fprintf(file,"\tDCD\t&%08x\n",error++);
     fprintf(file,"\t= \"%s\",0\n",l->message);
     fprintf(file,"\tALIGN\n");
     l = l->next;
@@ -839,7 +938,21 @@ static void generics(void) {
 }
 
 static void trailer(void) {
-
+  /* We need to have some space allocated for the stack for an entered RMA
+     application. This code needs re-working such that other parts of the
+     system can place blocks in this section without code re-writes. This
+     will basically mean that they can have a list of blocks to allocate
+     and their sizes which can just be traversed here. That's the idea.
+     How soon I implement it... gawd only knows... depends on when I next
+     have the opportunity to do something fun with CMunge that doesn't mean
+     large changes to the vast majority of RISC OS. Oh yes. I like RISC OS.
+     I do. Really. Oh yes. */
+  if (opt.runnable == run_rmaapp_simple)
+  { /* Icky */
+    fprintf(file,"\n\n\tAREA\t|!Header$$Data|, DATA\n");
+    fprintf(file, "_CMUNGE_stack\n");
+    fprintf(file, "\tDCD\t0 ; no stack at present\n");
+  }
   fprintf(file, "\n\n\tEND\n");
 }
 

@@ -98,6 +98,10 @@ clean:
 
 release: @.cmunge
         @echo Source release
+        -wipe @.CVS ~C~VR
+        -wipe @.h.CVS ~C~VR
+        -wipe @.c.CVS ~C~VR
+        -wipe @.o.CVS ~C~VR
         cdir @.ReleaseSrc
         wipe @.ReleaseSrc ~C~VR
         cdir @.ReleaseSrc
@@ -124,8 +128,11 @@ release: @.cmunge
         copy @.Docs          @.ReleaseBin.Docs ~C~VR
         copy @.cmunge        @.ReleaseBin.cmunge ~C~VR
         dir ^
+        remove BinCMunge/zip
         zip -r -9 BinCMunge/zip ReleaseBin
+        remove SrcCMunge/zip
         zip -r -9 SrcCMunge/zip ReleaseSrc
+        dir Src
 
 # User-editable dependencies:
 
