@@ -339,7 +339,7 @@ static void handlers(handler_list h, const char *type, rettype rtype) {
 
   while (h) {
     fprintf(file, "/* Symbol for entry point to module; never call this! */\n");
-    fprintf(file, "extern void *%s;\n", h->name);
+    fprintf(file, "extern void *%s(void);\n", h->name);
     fprintf(file, "\
 /*\n\
  * This name should be used as an argument to OS_Claim/OS_Release\n\
