@@ -131,6 +131,8 @@ static void mod_header(void) {
     fprintf(file, "\tDCD\t0\t\t\t; SWI table offset\n");
   if (opt.swi_decoder)
     fprintf(file, "\tDCD\t_CMUNGE_swi_decoder\t-_CMUNGE_origin\t; SWI decoding code offset\n");
+  else
+    fprintf(file, "\tDCD\t0\t\t\t; SWI decoding code offset\n");
   if (opt.mfile)
     fprintf(file, "\tDCD\t_CMUNGE_message_file\t-_CMUNGE_origin\t; Message file filename offset\n");
 }
