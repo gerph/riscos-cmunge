@@ -154,6 +154,7 @@ static void hdr_swis(void) {
   }
 
   /* X variants */
+  swi=opt.swi_base;
   l = opt.swi_names;
   if (l)
     l = l->next;
