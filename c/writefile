@@ -21,7 +21,7 @@ static void outstringNZ(const char *s) {
         fprintf(file, "\"");
         inquote = 1;
       }
-      fprintf(file, "%c", *s);
+      fputc(*s,file);
       s++;
     } else {
       if (inquote) {
@@ -41,6 +41,44 @@ static void outstringNZ(const char *s) {
 static void outstring(const char *s) {
 
   outstringNZ(s);
+  fprintf(file, ",0");
+}
+
+/* Note: R variants replace \n with \r - used for command handling */
+static void outstringNZR(const char *s) {
+
+  int inquote;
+
+  inquote = 0;
+  while (*s) {
+    if (((*s > 31) && (*s < 127)) || (*s == 32) || (*s == '\"')) {
+      if (!inquote) {
+        fprintf(file, "\"");
+        inquote = 1;
+      }
+      fputc(*s,file);
+      s++;
+    } else {
+      if (inquote) {
+        fprintf(file, "\",");
+        inquote = 0;
+      }
+      if (*s==10)
+        fprintf(file, "13");
+      else
+        fprintf(file, "%d", (int)*s);
+      s++;
+      if (*s)
+        fprintf(file, ",");
+    }
+  }
+  if (inquote)
+    fprintf(file, "\"");
+}
+
+static void outstringR(const char *s) {
+
+  outstringNZR(s);
   fprintf(file, ",0");
 }
 
@@ -146,15 +184,15 @@ static void commands(void) {
       fprintf(file, "_CMUNGE_ht%d\n", n);
       fprintf(file, "\t= ");
       if ((l->invalid_syntax) && (l->add_syntax))
-        outstringNZ(l->help_text);
+        outstringNZR(l->help_text);
       else
-        outstring(l->help_text);
+        outstringR(l->help_text);
       fprintf(file, "\n");
     }
     if (l->invalid_syntax) {
       fprintf(file, "_CMUNGE_is%d\n", n);
       fprintf(file, "\t= ");
-      outstring(l->invalid_syntax);
+      outstringR(l->invalid_syntax);
       fprintf(file, "\n");
     }
     l = l->next;
