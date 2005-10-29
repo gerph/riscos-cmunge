@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1999-2000 Robin Watts/Justin Fletcher
+ * Copyright (C) 1999-2003 Robin Watts/Justin Fletcher
  */
 
 #include <stdio.h>
@@ -13,6 +13,17 @@
 #include "options.h"
 #include "str.h"
 #include "readfile.h"
+#include "system.h"
+#include "filename.h"
+
+/* JRF: I don't like the idea of the tool location being fixed at compile
+        time, but John Tytgat informs me that this is unavoidable in the
+        cross-compiling environment that GCC employs. You'll just have to
+        rebuild with a new location if you use CMunge on a different
+        system. */
+#ifndef GCC_BIN_DIR
+#define GCC_BIN_DIR ""
+#endif
 
 #define UNUSED(x) { x=x; }
 
@@ -115,16 +126,58 @@ static void preprocess(FILE *file) {
   /* Now we have the line in prelinebuf */
   /* Spot the preprocessor directives */
   if (sscanf(prelinebuf," %i \"%[^\"]\"",&line,&filename)==2) {
-    opt.atline = line-1; /* GCC style */
+    /* It appears that GCC always generates its filenames in unix-format,
+       regardless of what you give it on the command line; to make the
+       throwback work properly, we must convert this to RISC OS style
+       if so given */
+    const char *nativefilename;
+#ifdef __riscos
+    nativefilename = filename_unixtoriscos(filename, EXTLIST_NORCROFT_CMHG);
+#else
+    /* On non-RISC OS systems, you won't care about the RISC OS filename;
+       it will only obscure the problems. */
+    nativefilename = filename;
+#endif
+    opt.atline = line-1;
     Free(opt.infile);
-    opt.infile = strdup(filename);
+    opt.infile = strdup_strip(nativefilename);
   }
-  if (sscanf(prelinebuf,"line %i \"%[^\"]\"",&line,&filename)==2) {
-    opt.atline = line-1; /* Norcroft style */
+  else if (sscanf(prelinebuf,"line %i \"%[^\"]\"",&line,&filename)==2) {
+    /* Norcroft always generates the filenames in native-format which is
+       correct for throwback. */
+    opt.atline = line-1;
     Free(opt.infile);
-    opt.infile = strdup(filename);
+    opt.infile = strdup_strip(filename);
   } else {
+    opt.atline++;
+#if 0
+    /* If this came from a pre-processed file, we should probably
+       report the error in the processed file - except the file
+       will be deleted when CMunge exits. So if we are pre-processing
+       we might want to report the error as being in some special
+       'processed-file' so that there is no confusion that this is
+       in an input file. However, the line number will then be wrong,
+       too.
+       I have not had enough time to think on this - it's not likely to
+       happen with the tools we use so it's probably not important.
+       Because of this, I've left it #if 0'd out. Someone should probably
+       think about it at some point. If only to satisfy the unlikely
+       failure case. */
+    if (opt.pfile)
+      opt.infile = "(processed-file)";
+#endif
     ErrorFatal("Unknown preprocessor command encountered: #%s", prelinebuf);
+  }
+
+  /* The pre-processor tool might be performing filename translation
+     and thus generating its line directives with a different name to the
+     input file. Because of this, we remember the first line declaration
+     that we see. This will henceforth be considered the root input file
+     and in non-extended pre-processor mode only lines from it will be
+     processed. */
+  if (opt.rootinfile == NULL)
+  {
+    opt.rootinfile = strdup_strip(opt.infile);
   }
 }
 
@@ -135,6 +188,9 @@ static char *getline(FILE *file) {
   int quoting, level, escape, concat;
   int done, linestart;
 
+  /* The 'retry' label is used to process lines which are being ignored
+     because they are inside the pre-processor's lower level includes. */
+retry:
   lineinit();
   /* First, skip whitespace */
   c = ' ';
@@ -312,6 +368,36 @@ static char *getline(FILE *file) {
   }
   insert(0);
 
+  /* If we not processing extended pre-processor operations, we need to act slightly
+     differently. CMHG will ignore anything which is not in the top level file
+     when it processes its input. This means that any text in a #include file
+     will be ignored completely in non-extended mode. In extended mode we process these
+     which means that we can therefore have fragments of the header files in
+     separate included files. */
+  if (!opt.pextended)
+  {
+    if (!Feof(file) && opt.rootinfile && strcmp(opt.rootinfile, opt.infile)!=0)
+    {
+      /* We are NOT inside the root input file that we were given. This means we're
+         in an included file. As such we need to just ignore the line. This is what
+         CMHG does and we're just copying them. */
+#if 0
+      /* JRF: I'm not sure that warning about these lines is really necessary so I've
+              commented it out for now. */
+      char *str = linebuf;
+      while (*str == ' ' || *str == '\t')
+        str++;
+      if (*str != '\0')
+      {
+        Warning("Ignoring line from included file '%s'", linebuf);
+      }
+#endif
+      /* For simplicity, we just return to the top of this routine to fetch the
+         next line. */
+      goto retry;
+    }
+  }
+
   return linebuf;
 }
 
@@ -328,7 +414,7 @@ static void read_services(const char *s, FILE *file) {
   UNUSED(file);
 
   if (opt.service)
-    ErrorFatal("Only supply one service-handler!");
+    ErrorFatal("Only supply one service-call-handler!");
   s = strduptok(s, &opt.service);
   if (*s == ',')
     while (isspace(*s))
@@ -356,12 +442,31 @@ static void read_services(const char *s, FILE *file) {
 static void read_events(const char *s, FILE *file) {
 
   int_list *l;
+  handler_list *lastp = &opt.events;
+  handler_list event;
+
+  if (*lastp && opt.cmhg)
+  {
+    /* If they want CMHG-style behaviour, we kill off the previous entries and just
+     * use the last one
+     */
+    Warning("multiple event-handlers specified (ignoring all but last for CMHG)");
+    *lastp = NULL;
+  }
+
+  /* Find the end of the list, so that we append to whatever is already there, rather
+     than replacing it */
+  while (*lastp)
+    lastp=&(*lastp)->next;
 
   UNUSED(file);
 
-  opt.events = Malloc(sizeof(*opt.events));
-  s = strfindpair(s, &opt.events->name, &opt.events->handler);
-  opt.events->next = NULL;
+  event = Malloc(sizeof(*event));
+  s = strfindpair(s, &event->name, &event->handler);
+  event->next = NULL;
+  if (*s == '(')
+    ErrorFatal("Event handlers cannot be passed parameters");
+
   if (*s == ',')
     while (isspace(*s))
       s++;
@@ -369,7 +474,7 @@ static void read_events(const char *s, FILE *file) {
     Warning("Not specifying event numbers impedes system performance!");
     return;
   }
-  l = &opt.event_nums;
+  l = (int_list *)&event->extradata;
   while (*s != 0) {
     *l = Malloc(sizeof(**l));
     s = strint(s, &(*l)->val);
@@ -380,6 +485,9 @@ static void read_events(const char *s, FILE *file) {
     l = &((*l)->next);
   }
   *l = NULL;
+
+  event->next = *lastp;
+  *lastp=event;
 }
 
 static void read_swis(const char *s, FILE *file) {
@@ -392,6 +500,7 @@ static void read_swis(const char *s, FILE *file) {
     ErrorFatal("Only supply one swi-decoding-table!");
 
   opt.swi_names = Malloc(sizeof(*opt.swi_names));
+  opt.swi_names->handler = NULL; /* Never used but for safety */
   s = strduptok(s, &opt.swi_names->name);
   l = &opt.swi_names->next;
   s = strcomma(s);
@@ -407,6 +516,9 @@ static void read_swis(const char *s, FILE *file) {
       if (opt.cmhg)
         CMHGWarning("handler supplied for swi %s",(*l)->name);
     }
+    if (*s == '(')
+      ErrorFatal("SWI handlers cannot be passed parameters");
+
     l = &(*l)->next;
     s = strcomma(s);
   }
@@ -597,11 +709,70 @@ static void read_commands(const char *s, FILE *file) {
   *l = NULL;
 }
 
-static void read_handlers(const char *s, handler_list *h) {
+static void read_handlers(const char *s, handler_list *h, int allow_pw,
+                          FILE *file) {
+
+  /* Find the end of the list, so that we append to whatever is already there, rather
+     than replacing it */
+  while (*h)
+    h=&(*h)->next;
 
   while (*s != 0) {
     *h = Malloc(sizeof(**h));
+    (*h)->extradata = NULL;
     s = strfindpair(s, &(*h)->name, &(*h)->handler);
+    (*h)->private_word = -1;
+    (*h)->carry_capable = 0;
+    if (*s == '(')
+    {
+      if (opt.cmhg)
+        CMHGWarning("handler arguments supplied for handler %s",(*h)->name);
+
+      s = strskip(s, '(');
+      while (*s != ')') {
+        if (strprefix(s, "private-word:")) {
+          if (!allow_pw)
+            ErrorFatal("private-word argument not permitted");
+          if ((*h)->private_word != -1)
+            ErrorFatal("private-word supplied twice!");
+          s += strlen("private-word:");
+          while (isspace(*s))
+            s++;
+
+          if (*s!='R' && *s!='r')
+            ErrorFatal("private-word value must be a register!");
+          s++;
+          s = strint(s, (unsigned int *)&(*h)->private_word);
+          if ((*h)->private_word < 0 ||
+              (*h)->private_word > 12)
+            ErrorFatal("private-word register must be 0-12!");
+        } else if (strprefix(s, "carry-capable:")) {
+          /* JRF: I'm reusing the allow_pw here just because it's simpler */
+          if (!allow_pw)
+            ErrorFatal("carry-capable argument not permitted");
+          (*h)->carry_capable = 1;
+
+          s += strlen("carry-capable:");
+          while (isspace(*s))
+            s++;
+        } else if (Feof(file)) {
+          ErrorFatal("Ran out of file when parsing handler details!");
+          break;
+        } else if (*s == 0) {
+          while ((*s == 0) && !Feof(file)) {
+            s = getline(file);
+            while (isspace(*s) && (!Feof(file)))
+              s++;
+          }
+        } else {
+          ErrorFatal("Unknown argument in handler: %s", s);
+          break;
+        }
+        s = strcomma(s);
+      }
+      s++;
+    }
+
     h = &(*h)->next;
     s = strcomma(s);
   }
@@ -633,25 +804,25 @@ static void read_swidec(const char *s, FILE *file) {
 static void read_generics(const char *s, FILE *file)
 {
   UNUSED(file);
-  read_handlers(s, &opt.generics);
+  read_handlers(s, &opt.generics, 1, file);
 }
 
 static void read_irqs(const char *s, FILE *file)
 {
   UNUSED(file);
-  read_handlers(s, &opt.irqs);
+  read_handlers(s, &opt.irqs, 0, file);
 }
 
 static void read_vectors(const char *s, FILE *file)
 {
   UNUSED(file);
-  read_handlers(s, &opt.vectors);
+  read_handlers(s, &opt.vectors, 0, file);
 }
 
 static void read_vector_traps(const char *s, FILE *file)
 {
   UNUSED(file);
-  read_handlers(s, &opt.vector_traps);
+  read_handlers(s, &opt.vector_traps, 0, file);
 }
 
 static void read_runnable(const char *s, FILE *file)
@@ -673,8 +844,8 @@ static void read_runnable(const char *s, FILE *file)
   }
 
   while (*s != 0) {
-    /* Please not that simple-app === run_rmaapp_simple and is a VERY
-       experimental feature. It gives you an application with an equivilent
+    /* Please note that simple-app === run_rmaapp_simple and is a VERY
+       experimental feature. It gives you an application with an equivalent
        entry sequence to that of ShareFS. It does NOT make the application
        multiply threadable in user mode. It does NOT handle any exceptions
        or other environment handlers. It does NOT provide a useful context
@@ -769,7 +940,17 @@ field_t fields[] =
       "When your module cannot be reentered you should declare this. "
       "At present it does nothing.\n"
       "You will probably never need this field."
-    }, IN_BOTH },
+    }, IN_CMUNGE /* I had this as IN_BOTH, but CMHG seems to fault it ? */
+  },
+
+  { "module-is-c-plus-plus",       { NULL, ft_flag_on, &opt.cplusplus },
+    { "",
+      "When your module includes C++ code built using the CFront compiler, "
+      "you should declare this. As part of the module initialisation "
+      "sequence, the C++ global constructors will be called. Essentially "
+      "this removes the requirement to manually invoke ______main."
+    }, IN_CMUNGE
+  },
 
   { "title-string",                { NULL, ft_label,    &opt.title },
     { "ModuleName",
@@ -807,7 +988,7 @@ field_t fields[] =
       "numbers for each, starting at a base number. You should register "
       "your error bases before distributing the module. Using random "
       "error numbers is dangerous."
-    }, IN_CMUNGE },
+    }, IN_CMUNGE | IN_ERRORS },
   { "error-chunk-base-number",     { NULL, ft_alias,   (void*)"error-base" } },
 
   { "error-identifiers",           { read_errors, ft_check, &opt.errors },
@@ -816,7 +997,7 @@ field_t fields[] =
       "doing so manually in your C code, and is less likely to pollute "
       "error number space. The number is optional, and if omitted will be "
       "allocated from the error chunk."
-    }, IN_CMUNGE },
+    }, IN_CMUNGE | IN_ERRORS },
 
   { "initialisation-code",         { NULL, ft_label,    &opt.init },
     { "Mod_Init",
@@ -885,37 +1066,42 @@ field_t fields[] =
       "You will probably never need this field."
     }, IN_BOTH },
 
-  { "generic-veneers",            { read_generics, ft_check, &opt.generics },
-    { "Veneer_Entry/Veneer_Call",
+  { "generic-veneers",            { read_generics,  ft_none, &opt.generics },
+    { "Veneer_Entry/Veneer_Handler",
       "Generic veneers are used to provide a simple C environment for SVC "
       "and IRQ modes. You should register the Entry routine as the external "
-      "interface (ie provide it as the code address to call). The Call "
-      "routine will be called from this."
+      "interface (ie provide it as the code address to call). The Handler "
+      "routine will be called from this. Parameters for the veneer may be "
+      "specified in brackets in the same form as command keywords :\n"
+      "\t({<field>: <value>})\n"
+      "Field names:\n"
+      "\tprivate-word: <register>\bPrivate word register\n"
+      "\tcarry-capable:\bVeneer is capable of handling returning of the carry flag\n"
     }, IN_BOTH },
 
-  { "irq-handlers",                { read_irqs,     ft_check, &opt.irqs },
-    { "IRQ_Entry/IRQ_Call",
+  { "irq-handlers",                { read_irqs,     ft_none, &opt.irqs },
+    { "IRQ_Entry/IRQ_Handler",
       "IRQ veneers are used to provide a simple C environment for SVC "
       "and IRQ modes. You should register the Entry routine as the external "
-      "interface (ie provide it as the code address to call). The Call "
+      "interface (ie provide it as the code address to call). The Handler "
       "routine will be called from this. You can return 0 or 1 from your "
       "routine to say you either handled the interrupt, or did not."
     }, IN_BOTH },
 
   { "vector-handlers",             { read_vectors,  ft_check, &opt.vectors },
-    { "Vector_Entry/Vector_Call",
+    { "Vector_Entry/Vector_Handler",
       "Vector veneers are used to provide a simple C environment for SVC "
       "and IRQ modes. You should register the Entry routine as the external "
-      "interface (ie provide it as the code address to call). The Call "
+      "interface (ie provide it as the code address to call). The Handler "
       "routine will be called from this. You can return 0 or 1 from your "
       "routine to say you either handled the vector, or did not."
     }, IN_BOTH },
 
-  { "vector-traps",                { read_vector_traps,  ft_check, &opt.vector_traps },
-    { "VectorTrap_Entry/VectorTrap_Call",
+  { "vector-traps",                { read_vector_traps, ft_check, &opt.vector_traps },
+    { "VectorTrap_Entry/VectorTrap_Handler",
       "VectorTrap veneers are used to provide a simple C environment for SVC "
       "and IRQ modes. You should register the Entry routine as the external "
-      "interface (ie provide it as the code address to call). The Call "
+      "interface (ie provide it as the code address to call). The Handler "
       "routine will be called from this. You can an error to pass this back "
       "to the calling. The function 'trap' can be called with a register "
       "block and private value to pass the call on to the vector. The trap "
@@ -923,16 +1109,16 @@ field_t fields[] =
       "is flagged this will be the return value."
     }, IN_CMUNGE },
 
-  { "event-handler",               { read_events,   ft_check, &opt.events },
+  { "event-handler",               { read_events,   ft_none, &opt.events },
     {
-      "Event_Entry/Event_Call 1 2 3 4 5 6",
+      "Event_Entry/Event_Handler 1 2 3 4 5 6",
       "Event handlers are used to provide a simple C environment for SVC "
       "and IRQ modes. You should register the Entry routine as the external "
-      "interface (ie provide it as the code address to call). The Call "
+      "interface (ie provide it as the code address to call). The Handler "
       "routine will be called from this. You can return 0 or 1 from your "
       "routine to say you either handled the interrupt, or did not. The "
       "list of numbers at the end of the line indicates which events (in "
-      "R0) will be passed to the Call routine. You can also trap upcalls "
+      "R0) will be passed to the Handler routine. You can also trap upcalls "
       "with an event handler, as their reason codes are also passed in R0."
     }, IN_BOTH },
 
@@ -942,21 +1128,23 @@ field_t fields[] =
       "file. The first entry is the routine to call to process the "
       "commands as they arrive. The remainder of the entries are the "
       "command definitions. These take the form :\n"
-      "  <Command>({<field>: <value>})\n"
+      "\t<Command>({<field>: <value>})\n"
       "\n"
       "Field names:\n"
-      "  min-args: <number>    Minimum number of arguments to command\n"
-      "  max-args: <number>    Maximum number of arguments to command\n"
-      "  gstrans-map: <bits>   Bitmap of arguments that should be GSTrans'd\n"
-      "  fs-command:           Declares that this is a filing system command\n"
-      "  international:        Declares this this uses international tokens\n"
-      "  add-syntax:           Adds the syntax message to the help message\n"
-      "  configure:            Declares that this is a configuration name\n"
-      "  status:               Declares that this is a configuration name\n"
-      "  help:                 Declares that we want to be called for help\n"
-      "                        message processing. Not implemented\n"
-      "  help-text: <string>   The text/token to use for *Help\n"
-      "  invalid-syntax: <string>  The text/token to use for syntax errors"
+      /* Note: The spaces in this block are unimportant; it's the \b code
+               that is important to line up the strings */
+      "\tmin-args: <number>   \bMinimum number of arguments to command\n"
+      "\tmax-args: <number>   \bMaximum number of arguments to command\n"
+      "\tgstrans-map: <bits>  \bBitmap of arguments that should be GSTransd\n"
+      "\tfs-command:          \bDeclares that this is a filing system command\n"
+      "\tinternational:       \bDeclares this this uses international tokens\n"
+      "\tadd-syntax:          \bAdds the syntax message to the help message\n"
+      "\tconfigure:           \bDeclares that this is a configuration name\n"
+      "\tstatus:              \bDeclares that this is a configuration name\n"
+      "\thelp:                \bDeclares that we want to be called for help "
+                               "message processing. Not implemented\n"
+      "\thelp-text: <string>  \bThe text/token to use for *Help\n"
+      "\tinvalid-syntax: <string>\bThe text/token to use for syntax errors"
     }, IN_BOTH },
 
   { "service-call-handler",        { read_services },
@@ -1000,7 +1188,7 @@ static void parse_line(FILE *file) {
 
     do {
       field=fields;
-      while (field->name && !strncasecmp(field->name,line))
+      while (field->name && !stricmp(field->name,line))
         field++;
       if (field->name==NULL)
         ErrorFatal("Unknown field: '%s'", line);
@@ -1009,9 +1197,11 @@ static void parse_line(FILE *file) {
     } while (field->values.type==ft_alias);
 
     if (field->hgtype==0)
-      ErrorFatal("%s isn't supported by any header generator (programmer error)",field->name);
+      ErrorFatal("%s is not supported by any header generator (programmer error)",field->name);
     if (!(field->hgtype & IN_CMUNGE))
-      ErrorFatal("%s isn't supported by CMunge",field->name);
+      ErrorFatal("%s is not supported by CMunge",field->name);
+    if (opt.mode_errors && !(field->hgtype & IN_ERRORS))
+      ErrorFatal("%s is not supported by CMunge in 'errors' mode\n",field->name);
     if (!(field->hgtype & IN_CMHG) && (opt.cmhg))
       CMHGWarning("%s used",field->name);
 
@@ -1034,14 +1224,13 @@ static void parse_line(FILE *file) {
       case ft_flag_on:
       case ft_flag_off:
         {
-          int flag;
           int *value=(int *)field->values.value;
           if (*tail=='\0')
           { /* They want the default operation */
             if (field->values.type==ft_flag_on)
-              flag=1;
+              *value=1;
             else
-              flag=0;
+              *value=0;
           }
           else
           {
@@ -1049,7 +1238,6 @@ static void parse_line(FILE *file) {
                user interface for it */
             ErrorFatal("Tailing junk after %s",field->name);
           }
-          *value=flag;
         }
         break;
 
@@ -1104,7 +1292,7 @@ static void parse_line(FILE *file) {
           if (*value!=NULL)
             ErrorFatal("Only supply one %s field!",field->name);
 
-          *value=strdup(tail);
+          *value=strdup_strip(tail);
         }
         break;
 
@@ -1127,7 +1315,33 @@ void ReadFile(void) {
   include_list includes;
 
   if (opt.pfile) {
-    bufend = buf+sprintf(buf, "cc -E -C++ %s > %s", opt.infile, opt.pfile);
+
+    /**** Command name */
+    switch (opt.toolchain)
+    {
+      case tc_gcc:
+        /* -xc hints that the input language is to be considered as C
+           because that is not necessarily guessable with the usual
+           cmhg extension. */
+        bufend = buf+sprintf(buf, GCC_BIN_DIR "gcc -E -nostdinc -xc");
+        break;
+      case tc_norcroft:
+#ifdef __riscos
+        bufend = buf+sprintf(buf, "cc -E -C++");
+#else
+        bufend = buf+sprintf(buf, "ncc -E -C++");
+#endif
+        break;
+      case tc_lcc:
+        bufend = buf+sprintf(buf, "cpp");
+        break;
+      default:
+        fprintf(stderr,"Invalid Toolchain (internal error)\n");
+        abort();
+        return;
+    }
+
+    /**** Defines and undefines */
     defines = opt.defines;
     while (defines) {
       if (defines->invert) {
@@ -1145,13 +1359,111 @@ void ReadFile(void) {
       bufend += sprintf(bufend, " -I%s", includes->path);
       includes = includes->next;
     }
-    if (opt.throwback)
-      bufend += sprintf(bufend," -throwback");
-    if (opt.dfile)
-      bufend += sprintf(bufend," -depend %s", opt.dfile);
-    rc = system(buf);
+
+    /**** Throwback and dependencies */
+    switch (opt.toolchain)
+    {
+      case tc_gcc:
+        /* Don't know how to do throwback with gcc on non-RISC OS platform */
+        /* Don't know how to do dependencies with gcc -
+             -M gives output in a mix of unix and RISC OS which isn't useful
+         */
+#ifdef __riscos
+        if (opt.throwback)
+          bufend += sprintf(bufend," -mthrowback");
+#endif
+        /* See the Options_CheckSanity in c.options for warnings about the
+           dependency and throwback usage. */
+        break;
+
+      case tc_norcroft:
+        if (opt.throwback)
+          bufend += sprintf(bufend," -throwback");
+        if (opt.dfile)
+          bufend += sprintf(bufend," -depend %s", opt.dfile);
+        break;
+
+      case tc_lcc:
+        /* Don't know how to do throwback with lcc */
+        /* Don't know how to do dependencies with lcc */
+        /* See the Options_CheckSanity in c.options for warnings about the
+           dependency and throwback usage. */
+        break;
+    }
+
+    /**** Filenames */
+    switch (opt.toolchain)
+    {
+      case tc_gcc:
+        bufend += sprintf(bufend, " %s -o %s", opt.infile, opt.pfile);
+        break;
+      case tc_norcroft:
+        if (opt.dfile)
+        {
+          char *result_file = NULL;
+          /* We have to provide the name of the file that is being generated
+             so that we have a correct dependency in the !Depend file. */
+          if (opt.ofile)
+            result_file = opt.ofile;
+          else if (opt.sfile && !opt.stemp)
+            result_file = opt.sfile;
+          else if (opt.hfile)
+            result_file = opt.hfile;
+          else if (opt.x_hdr)
+            result_file = opt.x_hdr;
+          else if (opt.x_h)
+            result_file = opt.x_h;
+          if (result_file != NULL)
+            bufend += sprintf(bufend, " -o %s", result_file);
+        }
+
+        {
+          FILE *f;
+          const char *nativefilename = opt.infile;
+          /* We need to identify whether the input file is valid or not;
+             Norcroft CC does not understand (for example) file.cmhg as
+             meaning cmhg.file. As such, we need to convert from the
+             Unix-named convention to the actual file. */
+          f = fopen(opt.infile, "r");
+          if (f)
+          {
+            fclose(f);
+            nativefilename = opt.infile;
+          }
+          else
+          {
+            const char *altfilename;
+            altfilename = filename_unixtoriscos(opt.infile,
+                                                EXTLIST_NORCROFT_CMHG);
+#ifndef __riscos
+            /* If we're not on RISC OS then a RISC OS name won't be valid
+               and we will need the actual unix name to be able to check
+               the file's existance. Because we specify no extension list,
+               we just get the filename conventions changed, with no
+               extension swapping.
+             */
+            altfilename = filename_riscostounix(altfilename, NULL);
+#endif
+            f = fopen(altfilename, "r");
+            if (f)
+            {
+              fclose(f);
+              nativefilename = altfilename;
+            }
+          }
+
+          bufend += sprintf(bufend, " %s > %s", nativefilename, opt.pfile);
+        }
+        break;
+      case tc_lcc:
+        bufend += sprintf(bufend, " %s > %s", opt.infile, opt.pfile);
+        break;
+    }
+
+    /* printf("Command: %s\n", buf); */
+    rc = our_system(buf);
     switch(rc) {
-      case 0: /* All ok */
+      case EXIT_SUCCESS: /* All ok */
         break;
       case -2: /* Failed */
         ErrorFatal("Could not start pre-processor");
@@ -1164,9 +1476,17 @@ void ReadFile(void) {
     if (file == NULL)
       ErrorFatal("Temporary pre-processor file not found");
   } else {
+    const char *filename;
     file = file_read(opt.infile, remove_never);
     if (file == NULL)
       ErrorFatal("File %s not found!", opt.infile);
+    /* The opt.infile can be changed (because of suffix swapping, or
+       canonicalisation). */
+    filename = file_getfilename(file);
+    if (filename == NULL)
+      ErrorFatal("Internal program error. file_getfilename() failed unexpectedly.");
+    Free(opt.infile);
+    opt.infile = strdup_strip(filename);
   }
 
   /* Allocate us a linebuffer */
@@ -1175,5 +1495,9 @@ void ReadFile(void) {
   while (!Feof(file)) {
     parse_line(file);
   }
+  /* We're at the end of our input file, so any errors/warnings
+     should not mention the last line of our input file as source
+     of the error/warning. */
+  opt.atline = 0;
   file_close(file);
 }

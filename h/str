@@ -3,12 +3,11 @@
  */
 
 #ifndef STR_H
-
 #define STR_H
 
-int strncasecmp(const char *p, const char *q);
+int stricmp(const char *p, const char *q);
 
-char *strdup(const char *p);
+char *strdup_strip(const char *p);
 
 const char *strduptok(const char *p, char **res);
 

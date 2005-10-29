@@ -1,14 +1,10 @@
 /*
- * Copyright (C) 1999 Robin Watts/Justin Fletcher
+ * Copyright (C) 1999-2003 Robin Watts/Justin Fletcher
  */
 
 #ifndef OPTIONS_H
 
 #define OPTIONS_H
-
-#define VERSION     "0.16"
-#define VERSION_NUM "16"
-#define DATE        "31 Oct 2000"
 
 /* List of integers */
 
@@ -66,7 +62,15 @@ typedef struct handler_list_s *handler_list;
 typedef struct handler_list_s {
   char         *name;
   char         *handler;
+  int          private_word;
+  int          carry_capable; /* Set for generics if it is capable of setting
+                                 carry on return */
   handler_list  next;
+  /* extradata contains any additional information required for the handler.
+     At present it is used for the event handler to reference an int_list
+     of the events which will be passed through.
+   */
+  void         *extradata;
 } handler_list_s;
 
 /* Error list */
@@ -90,6 +94,10 @@ typedef struct defines_list_s {
   defines_list  next;
 } defines_list_s;
 
+/* Shortcut checks so that it's easier to see what's happening */
+#define CODE32   (opt.apcs & APCS_32BIT)
+#define CODE26   (!CODE32)
+
 /* Main module structure */
 
 typedef struct {
@@ -100,11 +108,16 @@ typedef struct {
     run_rmaapp_simple  /* Set up a simple application with RMA stack - note
                           that this is exceptionally experimental */
   } runnable;	                /* module-is-runnable */
+  unsigned long apcs;
+  int apcs_used;                /* Flagged if -apcs option given */
+  int toolchain_used;           /* Flagged if -t<blah> option given */
   enum {
-    bitness_26,
-    bitness_32
-  } bitness;
+    tc_norcroft,
+    tc_gcc,
+    tc_lcc
+  } toolchain;
   int           reentrant;	/* module-is-not-reentrant */
+  int           cplusplus;      /* module-is-c-plus-plus */
   char         *service;	/* service-call-handler */
   int_list      services;	/* service-call-handler */
   char         *title;		/* title-string */
@@ -120,7 +133,6 @@ typedef struct {
   int           error_base;     /* error base */
   handler_list  irqs;		/* irq-handlers */
   handler_list  events;		/* event-handler */
-  int_list      event_nums;     /* event-nums */
   char         *init;		/* initialisation-code */
   char         *lib_init;	/* library-enter-code */
   char         *final;		/* finalisation-code */
@@ -147,6 +159,7 @@ typedef struct {
   /* Various output tweaks */
   int           oslib;          /* should produced C header be OSLib or Acorn compatible? */
   int           base;           /* should I define Image__RO_Base? */
+  int           mode_errors;    /* are we processing as 'errors only' mode ? */
 
   /* For throwback */
   int           throwback;
@@ -154,12 +167,15 @@ typedef struct {
   int           atline;
 
   /* For pre-processing */
+  char         *rootinfile;     /* the base input file to emulate cmhg's ignoring of anything in include files */
   char         *pfile;          /* preprocessed file */
+  int           pextended;      /* are we using extended pre-processor operations */
   defines_list  defines;        /* any defines added */
   include_list  includes;       /* Include Path List */
 
   /* Options from the CLI */
   int           cmhg;           /* We /are/ CMHG, to all intents and purposes */
+  int           help_requested; /* User requested help on CLI options */
 } options;
 
 extern options opt;

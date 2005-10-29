@@ -28,13 +28,8 @@ typedef enum
 
 #define IN_CMHG   (1)
 #define IN_CMUNGE (2)
+#define IN_ERRORS (4)
 #define IN_BOTH   (IN_CMHG | IN_CMUNGE)
-
-typedef enum
-{
-  in_cmhg,
-  in_both
-} intype;
 
 typedef struct {
   char *name;        /* The name of this field */

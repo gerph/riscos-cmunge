@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1999-2000 Robin Watts/Justin Fletcher
+ * Copyright (C) 1999-2003 Robin Watts/Justin Fletcher
  */
 
 #include <stdio.h>
@@ -8,8 +8,9 @@
 
 #include "error.h"
 #include "mem.h"
+#include "str.h"
 
-int strncasecmp(const char *p, const char *q) {
+int stricmp(const char *p, const char *q) {
 
   char a, b;
 
@@ -24,7 +25,7 @@ int strncasecmp(const char *p, const char *q) {
   }
 }
 
-char *strdup(char *p) {
+char *strdup_strip(const char *p) {
 
   char *res;
   int s;
@@ -33,8 +34,14 @@ char *strdup(char *p) {
   while (isspace(*p))
     p++;
   s = strlen(p)+1;
+
+  /* Strip any trailing whitespace */
+  while (s>1 && isspace(p[s-2]))
+    s--;
+
   res = Malloc(s);
-  strcpy(res, p);
+  memcpy(res, p, s-1);
+  res[s-1]='\0';
   return res;
 }
 
@@ -85,8 +92,12 @@ const char *strfindpair(const char *p, char **p1, char **p2) {
   while (isspace(*p))
     p++;
   s = p;
-  /* Look for / or whitespace */
-  while (!isspace(*p) && (*p != '/') && (*p != ',') && (*p != 0)) {
+  /* Look for slash, comma, bracket or whitespace */
+  while (!isspace(*p) &&
+         (*p != '/') &&
+         (*p != ',') &&
+         (*p != '(') &&
+         (*p != 0)) {
     p++;
   }
   if (p == 0)
@@ -117,7 +128,10 @@ const char *strfindpair(const char *p, char **p1, char **p2) {
   while (isspace(*p))
     p++;
   s = p;
-  while (!isspace(*p) && (*p != ',') && (*p != 0)) {
+  while (!isspace(*p) &&
+         (*p != ',') &&
+         (*p != '(') &&
+         (*p != 0)) {
     p++;
   }
   if (p == 0)
@@ -203,6 +217,7 @@ const char *strint(const char *s, unsigned int *i) {
       paren++;
     s++;
   }
+
   if (sscanf(s, "0x%x", i)) {
     s += 2;
     while (((*s >= '0') && (*s <= '9')) ||
@@ -220,15 +235,28 @@ const char *strint(const char *s, unsigned int *i) {
       s++;
   } else
     ErrorFatal("Failed to read expected number: %s", s0);
+
   /* Now skip closing parens etc */
-  while ((*s) && (isspace(*s) || (*s == ')'))) {
+  while ((*s) &&
+         (isspace(*s) || (*s == ')') || (*s == '+'))) {
     if (*s == ')')
     {
       if (paren==0)
         break;
       paren--;
     }
-    s++;
+
+    if (*s == '+')
+    {
+      unsigned int add;
+      /* Followed by a + symbol so we do some very simple processing to allow
+         additive maths, allowing recursion to take us around again for
+         another go */
+      s = strint(s+1, &add);
+      *i = *i + add;
+    }
+    else
+      s++;
   }
   /* JRF: Too many closing parentheses may be a valid situation /iff/ you have
           thing(16) - obviously that's a valid situation to have a closing

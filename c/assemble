@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1999-2000 Robin Watts/Justin Fletcher
+ * Copyright (C) 1999-2003 Robin Watts/Justin Fletcher
  */
 
 #include <stdio.h>
@@ -7,16 +7,16 @@
 #include <ctype.h>
 #include <string.h>
 
-#include "kernel.h"
-
 #include "datestamp.h"
 #include "error.h"
 #include "mem.h"
 #include "options.h"
+#include "system.h"
+#include "apcscli.h"
 
-typedef enum {
-  objasm, as, failed
-} stage_t;
+#ifndef GCC_BIN_DIR
+#define GCC_BIN_DIR ""
+#endif
 
 static char buf[2048];
 
@@ -25,44 +25,56 @@ void AssembleFile(void) {
   int rc;
 
   if (opt.ofile) {
-    stage_t stage = objasm;
-    while (stage!=failed)
+    int throwback;
+#ifdef __riscos
+    throwback = opt.throwback;
+#else
+    throwback = 0;
+#endif
+
+    switch (opt.toolchain)
     {
-      switch (stage)
-      {
-        case objasm:
-          sprintf(buf, "objasm -nowarn %s %s -o %s",
-                                opt.throwback ? "-throwback " : "",
-                                opt.sfile, opt.ofile);
-          break;
-        case as:
-          sprintf(buf, "as -gcc %s %s -o %s",
-                                opt.throwback ? "-throwback " : "",
-                                opt.sfile, opt.ofile);
-          break;
-      }
-
-      rc = system(buf);
-      switch (rc) {
-        case EXIT_SUCCESS:
-          /* Yo, success! print a message ? Nah, just return */
-          return;
-
-        case -2:
-          /* Erm... not enough memory... or not there... or something... */
-          /* Try the next one along */
-          stage=(stage_t)((int)stage+1); /* Ok, so we're incrementing an enum... pah! */
-          break;
-
-        default:
-          /* They returned something icky. Obviously that's a fault; they
-             should have already displayed an error as to the fault though.
-           */
-          fprintf(stderr,"Assembler returned %i unexpectedly; aborting\n",rc);
-          exit(rc);
-      }
+      case tc_norcroft:
+        {
+          unsigned long flags = opt.apcs;
+          char *bufend;
+          bufend = buf + sprintf(buf, "objasm -nowarn %s %s -o %s -apcs ",
+                                 throwback ? "-throwback " : "",
+                                 opt.sfile, opt.ofile);
+          bufend += apcscli_buildstring(flags, ~(APCS_32BIT |
+                                                 APCS_SWSTACKCHECK),
+                                        1, bufend, buf+2048-bufend);
+        }
+        break;
+      case tc_gcc:
+      case tc_lcc:
+        sprintf(buf, GCC_BIN_DIR "gcc -xassembler -mmodule %s %s -c %s -o %s",
+                          (CODE32) ? "-apcs32 -apcsfpv3" : "",
+                          throwback ? "-mthrowback" : "",
+                          opt.sfile, opt.ofile);
+        break;
     }
-    if (stage==failed)
-      ErrorFatal("Unable to spawn assembler");
+
+    /* printf("Command: %s\n",buf); */
+
+    rc = our_system(buf);
+    switch (rc) {
+      case EXIT_SUCCESS:
+        /* Yo, success! print a message ? Nah, just return */
+        return;
+
+      case -2:
+        /* Erm... not enough memory... or not there... or something... */
+        ErrorFatal("Unable to spawn assembler");
+        break;
+
+      default:
+        /* They returned something icky. Obviously that's a fault; they
+           should have already displayed an error as to the fault though.
+         */
+        fprintf(stderr,"Assembling: %s\n",buf);
+        fprintf(stderr,"Assembler returned %i unexpectedly; aborting\n",rc);
+        exit(rc);
+    }
   }
 }
