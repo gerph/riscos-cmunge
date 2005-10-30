@@ -1,30 +1,35 @@
+TARGET = cmunge
 LIBS = 
 INCS = 
 CDEFINES = 
 OBJS = \
-  apcscli.o\
-  assemble.o\
   blank.o\
-  comments.o\
-  datestamp.o\
-  error.o\
-  filename.o\
-  format.o\
-  gfile.o\
-  main.o\
-  mem.o\
-  options.o\
-  readfile.o\
-  str.o\
-  system.o\
-  throwback.o\
-  writeexport.o\
   writefile.o\
-  writeheader.o
+  writeexport.o\
+  writeheader.o\
+  throwback.o\
+  gfile.o\
+  system.o\
+  str.o\
+  readfile.o\
+  options.o\
+  mem.o\
+  main.o\
+  format.o\
+  filename.o\
+  error.o\
+  datestamp.o\
+  comments.o\
+  assemble.o\
+  apcscli.o
 
 .SUFFIXES: .s .c .c++ .o
 
-.PHONY: checklinks clean
+.PHONY: all checklinks clean
+
+# Every time we're run we check that the links are sensible. This keeps
+# us consistent
+all: $(TARGET) checklinks
 
 .s.o:
 	objasm -predefine "No26bitCode SETL {FALSE}" -predefine "No32bitCode SETL {TRUE}" -o ../o/$* $?
@@ -34,16 +39,14 @@ OBJS = \
 .c++.o:
 	cc -funsigned-char $(CDEFINES) $(INCS) -I. -I.. -c -o $@ $<
 
-# Every time we're run we check that the links are sensible. This keeps
-# us consistent
-CMunge: $(OBJS) $(LIBS) checklinks
-	cc -o CMunge $(OBJS) $(LIBS)
+$(TARGET): $(OBJS) $(LIBS)
+	cc -o $(TARGET) $(OBJS) $(LIBS)
 
 clean:
 	-rm *.o
-	-rm CMunge
+	-rm $(TARGET)
 
 # And an explicit check for this
 checklinks:
-	
+	@mklinks
 

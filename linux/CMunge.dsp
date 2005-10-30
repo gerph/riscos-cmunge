@@ -47,7 +47,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib comdlg32.lib shell32.lib kernel32.lib user32.lib gdi32.lib comdlg32.lib shell32.lib /nologo  /subsystem:console /machine:I386
-# ADD LINK32 kernel32.lib user32.lib gdi32.lib comdlg32.lib shell32.lib kernel32.lib user32.lib gdi32.lib comdlg32.lib shell32.lib clx.lib /nologo /subsystem:console /pdb:none /machine:I386 /libpath:"..\..\..\..\\Sources\Lib\CLX\linux\Win32\\" /out:"..\..\..\..\\Install\Win32\cmunge.exe"
+# ADD LINK32 kernel32.lib user32.lib gdi32.lib comdlg32.lib shell32.lib kernel32.lib user32.lib gdi32.lib comdlg32.lib shell32.lib clx.lib /nologo /subsystem:console /pdb:none /machine:I386 /libpath:"..\..\..\..\\Sources\Lib\CLX\linux\Win32\\" /out:"..\..\..\..\\Install\BuildTools\Win32\cmunge.exe"
 # Begin Target
 
 # Name "CMunge - Win32 Release"
@@ -56,71 +56,7 @@ LINK32=link.exe
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
-SOURCE=apcscli.c
-# End Source File
-# Begin Source File
-
-SOURCE=assemble.c
-# End Source File
-# Begin Source File
-
 SOURCE=blank.c
-# End Source File
-# Begin Source File
-
-SOURCE=comments.c
-# End Source File
-# Begin Source File
-
-SOURCE=datestamp.c
-# End Source File
-# Begin Source File
-
-SOURCE=error.c
-# End Source File
-# Begin Source File
-
-SOURCE=filename.c
-# End Source File
-# Begin Source File
-
-SOURCE=format.c
-# End Source File
-# Begin Source File
-
-SOURCE=gfile.c
-# End Source File
-# Begin Source File
-
-SOURCE=main.c
-# End Source File
-# Begin Source File
-
-SOURCE=mem.c
-# End Source File
-# Begin Source File
-
-SOURCE=options.c
-# End Source File
-# Begin Source File
-
-SOURCE=readfile.c
-# End Source File
-# Begin Source File
-
-SOURCE=str.c
-# End Source File
-# Begin Source File
-
-SOURCE=system.c
-# End Source File
-# Begin Source File
-
-SOURCE=throwback.c
-# End Source File
-# Begin Source File
-
-SOURCE=writeexport.c
 # End Source File
 # Begin Source File
 
@@ -128,7 +64,71 @@ SOURCE=writefile.c
 # End Source File
 # Begin Source File
 
+SOURCE=writeexport.c
+# End Source File
+# Begin Source File
+
 SOURCE=writeheader.c
+# End Source File
+# Begin Source File
+
+SOURCE=throwback.c
+# End Source File
+# Begin Source File
+
+SOURCE=gfile.c
+# End Source File
+# Begin Source File
+
+SOURCE=system.c
+# End Source File
+# Begin Source File
+
+SOURCE=str.c
+# End Source File
+# Begin Source File
+
+SOURCE=readfile.c
+# End Source File
+# Begin Source File
+
+SOURCE=options.c
+# End Source File
+# Begin Source File
+
+SOURCE=mem.c
+# End Source File
+# Begin Source File
+
+SOURCE=main.c
+# End Source File
+# Begin Source File
+
+SOURCE=format.c
+# End Source File
+# Begin Source File
+
+SOURCE=filename.c
+# End Source File
+# Begin Source File
+
+SOURCE=error.c
+# End Source File
+# Begin Source File
+
+SOURCE=datestamp.c
+# End Source File
+# Begin Source File
+
+SOURCE=comments.c
+# End Source File
+# Begin Source File
+
+SOURCE=assemble.c
+# End Source File
+# Begin Source File
+
+SOURCE=apcscli.c
 # End Source File
 # End Group
 # Begin Group "Header Files"
