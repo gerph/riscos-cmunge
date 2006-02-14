@@ -247,7 +247,13 @@ char *file_temp(void)
   ptr=malloc(sizeof(filelist));
   if (ptr==NULL)
     return NULL;
+#ifdef WIN32
+/* Windows appears to be generating us a non-fully specified temporary filename.
+   I'm seeing names like "\s250.1" which makes not so much sense. */
   ptr->filename=strdup_strip(tmpnam(NULL));
+#else
+  ptr->filename=strdup_strip(tmpnam(NULL));
+#endif
 #ifdef DEBUG
   printf("file_temp: %s\n",ptr->filename);
 #endif
