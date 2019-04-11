@@ -4,7 +4,7 @@
  *           schemes
  * Author:   Justin Fletcher
  * Date:     20 Jul 2005
- * Note:     The indention of this file is to support the most general
+ * Note:     The intention of this file is to support the most general
  *           forms of names that might be passed to commands that expect
  *           (or are expected to expect) unix-style filenames. This
  *           means that simple extensions will be translated from the

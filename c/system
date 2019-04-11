@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #ifdef __riscos
 #include "swis.h"
+#else
+#include <sys/wait.h>
 #endif
 #include "error.h"
 
@@ -111,6 +113,18 @@ int our_system(const char *cmdtxt)
   }
   /* printf("About to execute... %s\n",cmd); */
   rc = system(cmd);
+  /* printf("Returned %i\n", rc); */
+  if (rc != -1)
+  {
+    if (WIFEXITED(rc)) {
+        rc = WIFEXITED(rc);
+    }
+    else
+    {
+        /* Another type of return, so report a failure case */
+        rc = 255;
+    }
+  }
   free(cmd);
 
   /* Fake the RISC OS form of 'could not start process' */
