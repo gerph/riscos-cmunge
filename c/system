@@ -117,7 +117,7 @@ int our_system(const char *cmdtxt)
   if (rc != -1)
   {
     if (WIFEXITED(rc)) {
-        rc = WIFEXITED(rc);
+        rc = WEXITSTATUS(rc);
     }
     else
     {
