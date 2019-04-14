@@ -1,6 +1,6 @@
 CC = gcc
-LIBS =
-INCS =
+LIBS = $(RO_NATIVE)/CLX/clx.a
+INCS = -I$(RO_NATIVE)/CLX/
 CDEFINES =
 CFLAGS = -g $(INCS)
 
