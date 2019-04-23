@@ -1,0 +1,15 @@
+---
+
+resources:
+  build/native-build-headers:
+    phases: native:install
+    version: latest
+    path: $RO_NATIVE
+
+exports:
+  build/native-cmunge:
+    phases: native:install
+    upload: false
+    path: $ROTOOL_DIR
+    files:
+      - cmunge

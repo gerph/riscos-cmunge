@@ -1,0 +1,29 @@
+# Definition for CI within GitLab
+# Note:
+#    Prefix any job name with a '.' to disable.
+#
+
+
+# Enable submodules
+variables:
+  GIT_STRATEGY: clone
+  GIT_SUBMODULE_STRATEGY: none
+
+
+#### Builds ####
+build:
+  stage: build
+  script:
+    - git submodule sync ci
+    - git submodule update --init ci
+    - ci/build.sh native install
+  artifacts:
+    when: always
+    paths:
+      - artifacts/
+
+
+#### Stages to execute ####
+stages:
+#  - export
+  - build

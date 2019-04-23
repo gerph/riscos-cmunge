@@ -1,8 +1,12 @@
+COMPONENT = cmunge
 CC = gcc
 LIBS = $(RO_NATIVE)/CLX/clx.a
 INCS = -I$(RO_NATIVE)/CLX/
 CDEFINES =
-CFLAGS = -g $(INCS)
+ifneq ($(CI_BRANCH_VERSION),)
+CDEFINES += -DBUILD_VERSION="$(CI_BRANCH_VERSION)"
+endif
+CFLAGS = -g -funsigned-char $(INCS)
 
 FILES = \
 	apcscli.c apcscli.h assemble.c assemble.h \
@@ -39,17 +43,32 @@ OBJS = \
 
 .PHONY: all links
 
-all: cmunge
+all: $(COMPONENT)
 links: $(FILES)
 
+native_export:
+	@echo No exports
+
+native_install: \
+		tool_dir \
+		$(ROTOOL_DIR)/$(COMPONENT)
+	@echo Installed to $(ROTOOL_DIR)
+
+$(ROTOOL_DIR)/%: %
+	cp $? $@
+
+tool_dir:
+	mkdir -p $(ROTOOL_DIR)
+
+
 clean:
-	-rm -f *.c *.h VersionNum *.o cmunge
+	-rm -f *.c *.h VersionNum *.o $(COMPONENT)
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(CDEFINES) -c -o $@ $<
 
-cmunge: $(OBJS) $(LIBS)
-	$(CC) -g -o cmunge $(OBJS) $(LIBS)
+$(COMPONENT): $(OBJS) $(LIBS)
+	$(CC) -g -o $(COMPONENT) $(OBJS) $(LIBS)
 
 # Links
 apcscli.o: apcscli.c apcscli.h
@@ -129,7 +148,7 @@ system.c: ../c/system
 	ln -sf ../c/system system.c
 system.h: ../h/system
 	ln -sf ../h/system system.h
-throwback.o: throwback.c throwback.h throwback.h
+throwback.o: throwback.c throwback.h
 throwback.c: ../c/throwback
 	ln -sf ../c/throwback throwback.c
 throwback.h: ../h/throwback
