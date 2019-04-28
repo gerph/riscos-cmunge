@@ -31,10 +31,11 @@ void DateStamp(void) {
   /* Skip whitespace */
   while (isspace(*s))
     s++;
+
   /* Copy name, counting chars */
   i = 0;
   do {
-    while (!isspace(*s)) {
+    while (*s != '\0' && !isspace(*s)) {
       *date++ = *s++;
       i++;
     }

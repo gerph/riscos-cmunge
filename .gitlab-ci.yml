@@ -11,7 +11,7 @@ variables:
 
 
 #### Builds ####
-build:
+.build-base: &build_base
   stage: build
   script:
     - git submodule sync ci
@@ -22,6 +22,16 @@ build:
     paths:
       - artifacts/
       - ci-logs/
+
+build-linux:
+  <<: *build_base
+  tags:
+    - linux
+
+build-macos:
+  <<: *build_base
+  tags:
+    - macos
 
 
 #### Stages to execute ####
