@@ -6,7 +6,8 @@ CDEFINES =
 ifneq ($(CI_BRANCH_VERSION),)
 CDEFINES += -DBUILD_VERSION="$(CI_BRANCH_VERSION)"
 endif
-CFLAGS = -g -funsigned-char $(INCS)
+PLATFORM_CFLAGS ?= -fPIE
+CFLAGS = -g $(PLATFORM_CFLAGS) -funsigned-char $(INCS)
 
 FILES = \
 	apcscli.c apcscli.h assemble.c assemble.h \
