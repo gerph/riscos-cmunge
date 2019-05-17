@@ -9,6 +9,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <limits.h>
+#ifndef __riscos
+#include <unistd.h>
+#endif
 #include "gfile.h"
 #include "str.h"
 #include "filename.h"
@@ -252,7 +256,23 @@ char *file_temp(void)
    I'm seeing names like "\s250.1" which makes not so much sense. */
   ptr->filename=strdup_strip(tmpnam(NULL));
 #else
+#ifdef __riscos
   ptr->filename=strdup_strip(tmpnam(NULL));
+#else
+  {
+    char tempname[PATH_MAX];
+    char *tmpdir = getenv("TMPDIR");
+    char *temp;
+
+    if (!tmpdir)
+    {
+        tmpdir = "/tmp";
+    }
+    sprintf(tempname, "%s/cmunge-XXXXXXXX", tmpdir);
+    temp = mktemp(tempname);
+    ptr->filename=strdup_strip(temp);
+  }
+#endif
 #endif
 #ifdef DEBUG
   printf("file_temp: %s\n",ptr->filename);
