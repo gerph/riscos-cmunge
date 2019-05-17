@@ -127,9 +127,9 @@ int our_system(const char *cmdtxt)
       cmdtxt++;
     }
   }
-  /* printf("About to execute... %s\n",cmd); */
+  dprintf("Starting command '%s'\n", cmd);
   rc = system(cmd);
-  /* printf("Returned %i\n", rc); */
+  dprintf("Returned %i\n", rc);
   if (rc != -1)
   {
     if (WIFEXITED(rc)) {
