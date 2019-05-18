@@ -52,6 +52,7 @@ native_export:
 
 native_install: \
 		tool_dir \
+		test \
 		$(ROTOOL_DIR)/$(COMPONENT)
 	@echo Installed to $(ROTOOL_DIR)
 
@@ -61,6 +62,10 @@ $(ROTOOL_DIR)/%: %
 tool_dir:
 	mkdir -p $(ROTOOL_DIR)
 
+test: $(COMPONENT)
+	mkdir -p ../testdata/o
+	mkdir -p ../artifacts
+	perl ../testdata/test.pl --junitxml ../artifacts/results.xml --show-command --show-output $(shell pwd)/$(COMPONENT) ../testdata
 
 clean:
 	-rm -f *.c *.h VersionNum *.o $(COMPONENT)

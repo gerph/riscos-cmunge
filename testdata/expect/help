@@ -1,0 +1,54 @@
+CMunge <VERSION>
+Copyright (c) 1999-2006 Robin Watts/Justin Fletcher
+
+Make a RISC OS module header for a module written in C/C++.
+
+Usage: cmunge [options] infile
+
+Options:
+
+  -h                 Output this information.
+  -o <file>          Name the output AOF file.
+  -s <file>          Name the output assembler file.
+  -d <file>          Name a C header file that CMunge will generate.
+  -xhdr <file>       Name a Assembler SWI header file that CMunge will
+                     generate.
+  -xh <file>         Name a C SWI header file that CMunge will generate.
+  -p                 Pre-process the file with pre-processor before parsing.
+  -px                Extended pre-processing of all content from
+                     pre-processor.
+  -I<directory>      Include <directory> on the #include search path.
+  -D<symbol>=<value> 
+  -D<symbol>         Define <symbol> on entry to the preprocessor.
+  -U<symbol>         Undefine <symbol> on entry to the preprocessor.
+  -depend <file>     Output 'make' include file dependency information to
+                     <file>.
+  -throwback         Use throwback for error processing.
+  -zbase             Define symbol Image__RO_Base in generated header.
+  -zerrors           Define errors and veneers only (for use in
+                     applications).
+  -zoslib            Use '#include "oslib/os.h"' (OSLib) instead of
+                     '#include "kernel.h"' (Acorn) in generated C header
+                     file.
+  -blank             Generate a blank cmhg file to infile.
+  -cmhg              Give warnings for non-CMHG values.
+  -tgcc              Use GCC tool chain to generate output.
+  -tlcc              Use LCC tool chain to generate output.
+  -tnorcroft         Use Norcroft tool chain to generate output (default).
+  -32bit             Generate 32-bit compatible code.
+  -26bit             Generate 26-bit only code (default).
+  -apcs 3/<flags>    Specify APCS variant to use.
+
+APCS flags: (*=currently selected)
+  /32[bit]           32 bit APCS variant
+  /26[bit]          *26 bit APCS variant
+  /reent[rant]       Reentrant APCS variant
+  /nonreent[rant]   *Non reentrant APCS variant
+  /fpe3              Floating point emulator 3 compatibility
+  /fpe2             *Floating point emulator 2 compatibility
+  /swst[ackcheck]   *Software stack checking APCS variant
+  /noswst[ackcheck]  No software stack checking APCS variant
+  /fpr[egargs]      *FP arguments passed in FP registers
+  /nofpr[egargs]     FP arguments are not passed in FP registers
+  /fp                Arguments referenced through the frame pointer
+  /nofp             *Arguments referenced through the stack pointer

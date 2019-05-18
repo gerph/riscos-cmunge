@@ -1,0 +1,1 @@
+s/^CMunge \d\.\d\d.*?$/CMunge <VERSION>/m

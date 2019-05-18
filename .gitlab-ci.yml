@@ -22,6 +22,10 @@ variables:
     paths:
       - artifacts/
       - ci-logs/
+    reports:
+      junit:
+        # The Tests for cc generates a JunitXML output file.
+        - artifacts/results.xml
 
 build-linux:
   <<: *build_base

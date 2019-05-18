@@ -316,7 +316,8 @@ void Options_CL(int argc, char *argv[]) {
      the command line become visible in the help output. */
   if (opt.help_requested) {
     help_text();
-    exit(EXIT_FAILURE);
+    /* They requested help, so that's success */
+    exit(EXIT_SUCCESS);
   }
 }
 
