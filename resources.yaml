@@ -6,10 +6,32 @@ resources:
     version: latest
     path: $RO_NATIVE
 
+  build/native-build-tools:
+    phases: install
+    version: latest
+    path: $ROTOOL_DIR
+
+  build/root-env:
+    phases: install
+    version: latest
+    path: $ROBUILD_DIR/Env
+
+  build/build-libs:
+    phases: install
+    version: latest
+    path: $EXPORTS_DIR
+
+
 exports:
-  build/native-cmunge:
+  build/crosscompile-cmunge:
     phases: native:install
     upload: false
     path: $ROTOOL_DIR
     files:
-      - cmunge
+      - riscos-cmunge
+
+  library/cmunge:
+    phases: install
+    newer: true
+    path: $INSTALL_DIR/Library
+

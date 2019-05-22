@@ -10,35 +10,54 @@ variables:
   GIT_SUBMODULE_STRATEGY: none
 
 
-#### Builds ####
-.build-base: &build_base
-  stage: build
-  script:
+# Common definitions for the jobs
+.common: &common
+  before_script:
     - git submodule sync ci
     - git submodule update --init ci
-    - ci/build.sh native install
   artifacts:
     when: always
     paths:
-      - artifacts/
-      - ci-logs/
+      - artifacts
+      - ci-logs
+  dependencies: []
+
+
+.common-cross: &common-cross
+  <<: *common
     reports:
       junit:
         # The Tests for cc generates a JunitXML output file.
         - artifacts/results.xml
 
+
+#### Builds ####
 build-linux:
-  <<: *build_base
+  <<: *common-cross
+  stage: build-cross
+  script:
+    - ci/build.sh native install
   tags:
     - linux
 
 build-macos:
-  <<: *build_base
+  <<: *common-cross
+  stage: build-cross
+  script:
+    - ci/build.sh native install
   tags:
     - macos
+
+
+build-command-riscos:
+  <<: *common
+  stage: build-riscos
+  script:
+    - ci/build.sh install
 
 
 #### Stages to execute ####
 stages:
 #  - export
-  - build
+  - build-cross
+  - build-riscos
