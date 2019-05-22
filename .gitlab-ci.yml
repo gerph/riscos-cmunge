@@ -15,7 +15,7 @@ variables:
   before_script:
     - git submodule sync ci
     - git submodule update --init ci
-  artifacts:
+  artifacts: &artifacts
     when: always
     paths:
       - artifacts
@@ -25,6 +25,8 @@ variables:
 
 .common-cross: &common-cross
   <<: *common
+  artifacts:
+    <<: *artifacts
     reports:
       junit:
         # The Tests for cc generates a JunitXML output file.
