@@ -1609,11 +1609,7 @@ void ReadFile(void) {
         bufend = buf+sprintf(buf, GCC_BIN_DIR "gcc -E -nostdinc -xc");
         break;
       case tc_norcroft:
-#ifdef __riscos
-        bufend = buf+sprintf(buf, "cc -E -C++");
-#else
-        bufend = buf+sprintf(buf, "ncc -E -C++");
-#endif
+        bufend = buf+sprintf(buf, "%s -E -C++", NORCROFT_CC);
         break;
       case tc_lcc:
         bufend = buf+sprintf(buf, "cpp");

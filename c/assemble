@@ -38,7 +38,8 @@ void AssembleFile(void) {
         {
           unsigned long flags = opt.apcs;
           char *bufend;
-          bufend = buf + sprintf(buf, "objasm -nowarn %s %s -o %s -apcs ",
+          bufend = buf + sprintf(buf, "%s -nowarn %s %s -o %s -apcs ",
+                                 NORCROFT_OBJASM,
                                  throwback ? "-throwback " : "",
                                  opt.sfile, opt.ofile);
           bufend += apcscli_buildstring(flags, ~(APCS_32BIT |

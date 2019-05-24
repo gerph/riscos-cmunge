@@ -191,4 +191,13 @@ void Options_CheckSanity(void);
 
 void Options_CheckSanityPostRead(void);
 
+/* Naming conventions for the toolchain */
+#ifdef __riscos
+#define NORCROFT_OBJASM "objasm"
+#define NORCROFT_CC     "cc"
+#else
+#define NORCROFT_OBJASM "riscos-objasm"
+#define NORCROFT_CC     "riscos-cc"
+#endif
+
 #endif
