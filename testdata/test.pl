@@ -1,6 +1,116 @@
 #!/usr/bin/perl
 ##
-# Build the test code to check that objasm works.
+# Build the test code to check that the toolchain works.
+#
+# We take a description file, conventionally called 'tests.txt', which
+# contains:
+#    A number of Group definitions
+#    A number of Tests within those definitions
+#
+# Any definitions within the Group are inherited within the Test, and
+# only acted on within the test (with a couple of exceptions).
+#
+# Groups are executed in order given in the description.
+# Tests within the grounp in the order given in the description.
+#
+# Groups have names, to distinguish them from one another
+# Tests have names, to distinguish them within the group.
+#
+# Tests will execute a command, using the supplied tool.
+# The command (and many other of the parameters) may be parameterised
+# to allow it to be run in different ways.
+# Tests must return a given return code, or they will fail.
+# Tests may be checked for specific output.
+# Tests may check a single output file's content.
+# Tests may be marked as disabled, to prevent them running, but keep
+# them in the description.
+#
+# Checkers can be configured which check the content of generated
+# files.
+#
+# Description file format:
+#
+# # at the start of a line marks a comment.
+# Statements take the form:
+#    <statement>: <argument>
+#
+# Group definitions start at a 'Group:' statement, and end with either a
+# 'Test' statement, or another 'Group:' statement.
+#
+# Group: <group name>
+#       - begins a Group
+# Test: <test name>
+#       - begins a Test definition
+#
+# When a Test definition is encountered, it begins with the same
+# definitions as were present in the Group. Any subsequent statements
+# will override the group statements.
+#
+# Statements currently defined are:
+#
+# Group: <name>
+#       - Begin a group definition
+# Test: <name>
+#       - Begin a test definition
+# Command: <command>
+#       - Command to execute
+# File: <source filename>
+#       - Source filename to apply
+# Expect: <expectation filename>
+#       - File to compare the output to
+# Replace: <replacements filename>
+#       - File containing regular expressions to filter output before
+#         comparing to Expectation file
+# Creates: <output file>
+#       - Specify a name of a file that is expected to be created.
+#         If it's not present, the test fails.
+# Length: <length of the created file>
+#       - Expected length of the file; if it doesn't match, the test
+#         will fail
+# RC: <return code expected>
+#       - Expected return code; if it's different the test will fail
+#         Otherwise, the test must return 0.
+# Disable: <message>
+#       - Disable a test (or the group), with a message
+# <checker>:<parameter>: <argument>
+#       - Provide parameters to a specific checker.
+#
+# All of the arguments can has values substituted into them.
+# The following substitutions are available:
+#
+#   $TOOL
+#       - tool name as supplied on the command line
+#   $FILE
+#       - filename as supplied, in the 'File' statement
+#   $OFILE
+#       - generated object file, in native format
+#   $SFILE
+#       - generated assembler file, in native format
+#   $BASE
+#       - base filename
+#
+# Checkers are named by a short string, and contain parameters
+# which can be used to confirm that the file was created correctly.
+#
+# Checkers and parameters:
+#
+# - 'aof' checker:
+#
+#   aof:totalareasize: <size>
+#       - The sum of all the areas in the file
+#
+# - 'alf' checker:
+#
+#   alf:files: <number of files>
+#       - The number of files in the library
+#
+# - 'text' checker:
+#
+#   text:matches: <filename>
+#       - File to compare the content against
+#   text:replace: <replacement file>
+#       - File containing regular expressions to replace before
+#         comparing to the matches file
 #
 
 use warnings;
@@ -9,21 +119,22 @@ use strict;
 my $testtool = undef;
 my $dir = undef;
 
-my $group = undef;
-my $test = undef;
-my $acc = undef;
-
 # Whether we're debugging
 my $debug_filename = 0;
 my $debug_replace = 0;
 my $debug_aof = 0;
 
+# Matching for test selection
+my $matchgroup_re = undef;
+my $matchtest_re = undef;
+
 # Verbose output?
 my $verbose = 1;
 my $showcmd = 0;
 
-# Show failure output
+# Output controls
 my $outputdump = 0;
+my $outputsavedir = undef;
 
 # Generate Junit XML at the end? (the filename)
 my $junitxml = undef;
@@ -50,9 +161,21 @@ while ($arg = shift)
         {
             $outputdump = 1;
         }
+        elsif ($switch eq 'save-output')
+        {
+            $outputsavedir= shift;
+        }
         elsif ($switch eq 'junitxml')
         {
             $junitxml = shift;
+        }
+        elsif ($switch eq 'group')
+        {
+            $matchgroup_re = shift;
+        }
+        elsif ($switch eq 'test')
+        {
+            $matchtest_re = shift;
         }
         elsif ($switch eq 'debug')
         {
@@ -89,13 +212,16 @@ if (!defined $testtool ||
     print "Options:\n";
     print "    -verbose         Verbose output\n";
     print "    -quiet           Not verbose output\n";
+    print "    -group <re>      Regular expression to match for group name\n";
+    print "    -test <re>       Regular expression to match for test name\n";
     print "    -show-command    Show command executed\n";
     print "    -show-output     Show output on failure\n";
+    print "    -save-output <dir>   Save all output to a directory\n";
     print "    -debug <type>    Enable debug types as comma-separated list\n";
     exit 1;
 }
 
-my $extensions_re = "s|c|h|cmhg|s_c|o";
+my $extensions_re = "s|c|h|cmhg|s_c|o|aof|bin";
 
 my ($none, $testtoolname) = ($testtool =~ /(^|\/)([^\/]*)$/);
 
@@ -105,6 +231,7 @@ my $testscript = "$dir/tests.txt";
 my %testparams = map { $_ => 1 } (
         'command',
         'expect',
+        'disable',
         'creates',
         'length',
         'rc',
@@ -112,12 +239,17 @@ my %testparams = map { $_ => 1 } (
         'replace',
     );
 
-my %handlers = (
+my %checkers = (
         'text' => \&text_check,
         'aof' => \&aof_check,
         'alf' => \&alf_check,
+        'binary' => \&binary_check,
     );
 
+
+my $group = undef;
+my $test = undef;
+my $acc = undef;
 
 my @groups;
 open(my $testfh, "< $testscript") || die "Cannot open test script '$testscript': $!";
@@ -126,16 +258,16 @@ while (<$testfh>)
     chomp;
     next if (/^ *#/ || /^ *$/);
 
-    my $handler;
+    my $checker;
     my ($cmd, $arg) = (/^([A-Za-z]+): +(.*?) *$/);
     if (!$cmd)
     {
-        # Not a base command specification; so try a handler value.
-        ($handler, $cmd, $arg) = (/^([A-Za-z]+):([A-Za-z]+): *(.*?) *$/);
-        $handler = lc $handler;
-        if (!defined $handlers{$handler})
+        # Not a base command specification; so try a checker value.
+        ($checker, $cmd, $arg) = (/^([A-Za-z]+):([A-Za-z]+): *(.*?) *$/);
+        $checker = lc $checker;
+        if (!defined $checkers{$checker})
         {
-            die "Unrecognised handler '$handler' in '$_'";
+            die "Unrecognised checker '$checker' in '$_'";
         }
     }
 
@@ -144,37 +276,58 @@ while (<$testfh>)
         die "Cannot understand line '$_'";
     }
 
-    if (defined $handler)
+    if (defined $checker)
     {
-        if (!defined $acc->{$handler})
+        if (!defined $acc->{$checker})
         {
-            $acc->{$handler} = {};
+            $acc->{$checker} = {};
         }
-        $acc->{$handler}->{lc $cmd} = $arg;
+        $acc->{$checker}->{lc $cmd} = $arg;
     }
     elsif ($cmd eq 'Group')
     {
         $group = {
+                'group-index' => scalar(@groups),
                 'group' => $arg,
                 'tests' => [],
                 'pass' => 0,
                 'fail' => 0,
                 'crash' => 0,
+                'skip' => 0,
             };
         delete $acc->{'tests'};
         $test = undef;
         $acc = $group;
         push @groups, $group;
+
+        if ($matchgroup_re && $group->{'group'} !~ /$matchgroup_re/)
+        {
+            $group->{'skip'} = 1;
+        }
     }
     elsif ($cmd eq 'Test')
     {
         $test = {
                 %$group,
+                'test-index' => scalar(@{$group->{'tests'}}),
                 'name' => $arg,
             };
+        for my $key (keys %$test)
+        {
+            if (ref($test->{$key}) eq 'HASH')
+            {
+                # If the element was a hash, copy it.
+                $test->{$key} = { %{$test->{$key}} };
+            }
+        }
         push @{$group->{'tests'}}, $test;
         delete $test->{'tests'};
         $acc = $test;
+
+        if ($matchtest_re && $test->{'name'} !~ /$matchtest_re/)
+        {
+            $test->{'skip'} = 1;
+        }
     }
     elsif (defined($testparams{lc $cmd}))
     {
@@ -199,17 +352,17 @@ sub setup_variables
         $vars->{'SFILE'} = '';
         $vars->{'BASE'} = '';
     }
-    elsif ($test->{'file'} =~ /^($extensions_re)\.(.*)/)
+    elsif ($test->{'file'} =~ /(^|.*\.)($extensions_re)\.(.*)/)
     {
-        $vars->{'OFILE'} = "o.$2";
-        $vars->{'SFILE'} = "s.$2";
-        $vars->{'BASE'} = "$2";
+        $vars->{'OFILE'} = "$1o.$3";
+        $vars->{'SFILE'} = "$1s.$3";
+        $vars->{'BASE'} = "$3";
     }
-    elsif ($test->{'file'} =~ /^($extensions_re)\/(.*)/)
+    elsif ($test->{'file'} =~ /^(^|.*\/)($extensions_re)\/(.*)/)
     {
-        $vars->{'OFILE'} = "o/$2";
-        $vars->{'SFILE'} = "s/$2";
-        $vars->{'BASE'} = "$2";
+        $vars->{'OFILE'} = "$1o/$3";
+        $vars->{'SFILE'} = "$1s/$3";
+        $vars->{'BASE'} = "$3";
     }
     else
     {
@@ -219,12 +372,30 @@ sub setup_variables
     return $vars;
 }
 
+
+##
+# Perform escaping on a parameter.
+#
+# @param $param         What to escape
+# @param $escapetype    How to escape:
+#                           0 => not at all
+#                           1 => shell escaping
+sub escape
+{
+    my ($param, $escapetype) = @_;
+    if (defined $escapetype && $escapetype == 1)
+    {
+        $param =~ s/(['";&])/\\$1/g;
+    }
+    return $param;
+}
+
 sub substitute
 {
-    my ($str, $vars) = @_;
+    my ($str, $vars, $escapetype) = @_;
     return $str if (!defined $str);
 
-    $str =~ s/\$([A-Z]+)/$vars->{$1} || die "Variable '$1' not defined in '$str'"/eg;
+    $str =~ s/(^|[^\\])\$([A-Z]+)/$1 . escape($vars->{$2}, $escapetype) || die "Variable '$1' not defined in '$str'"/eg;
     return $str;
 }
 
@@ -233,9 +404,9 @@ sub number
     my ($str) = @_;
     return undef if (!defined $str);
 
-    if ($str =~ /^0x([0-9a-fA-F]+)$/)
+    if ($str =~ /^(0x|&)([0-9a-fA-F]+)$/)
     {
-        return hex($str);
+        return hex($2);
     }
     return $str;
 }
@@ -244,6 +415,8 @@ sub native_filename
 {
     my ($filename) = @_;
     my $dirsep;
+
+    die "No filename passed to native_filename" if (!defined $filename);
 
     if ($^O eq 'riscos')
     {
@@ -345,13 +518,27 @@ sub apply_replacements
     return $output;
 }
 
+##
+# Run a specified test.
+#
+# Uses the parameters in the test to determine how the test should
+# be run.
+#
+# @param $test      Test parameters
+#
+# @retval 0     Test passed
+# @retval 1     Test failed for some reason
+# @retval 2     Test crashed (signal generated)
+# @retval -1    Test skipped
+
 sub run_test
 {
     my ($test) = @_;
     my $vars = setup_variables($test);
 
     my $name = $test->{'name'};
-    my $cmd = substitute($test->{'command'}, $vars);
+    my $disable = substitute($test->{'disable'}, $vars);
+    my $cmd = substitute($test->{'command'}, $vars, 1);
     my $creates = substitute($test->{'creates'}, $vars);
     my $length = substitute($test->{'length'}, $vars);
     my $expect = substitute($test->{'expect'}, $vars);
@@ -367,6 +554,17 @@ sub run_test
     }
 
     printf '  %-34s : ', $name;
+
+    if ($disable)
+    {
+        # They requested this test not run for a reason.
+        $test->{'skip'} = 1;
+        $test->{'result'} = 'skip';
+        $test->{'result_message'} = $disable;
+        print "SKIP: $disable\n";
+        return -1;
+    }
+
     my $cmdtorun = $cmd;
     if ($cmdtorun !~ / 2>/)
     {
@@ -420,14 +618,18 @@ sub run_test
 
         if (!$fail)
         {
-            for my $handler (keys %handlers)
+            for my $checker (keys %checkers)
             {
-                if (defined $test->{$handler})
+                if (defined $test->{$checker})
                 {
-                    my $args = $test->{$handler};
-                    my $func = $handlers{$handler};
+                    my %args = %{$test->{$checker}};
+                    my $func = $checkers{$checker};
                     eval {
-                        $fail = & $func ($creates, $args);
+                        for my $key (keys %args)
+                        {
+                            $args{$key} = substitute($args{$key}, $vars);
+                        }
+                        $fail = & $func ($creates, \%args);
                     };
                     if ($@)
                     {
@@ -436,7 +638,7 @@ sub run_test
                     }
                     if ($fail)
                     {
-                        $fail = "$handler: $fail";
+                        $fail = "$checker: $fail";
                         last;
                     }
                 }
@@ -485,6 +687,25 @@ sub run_test
         }
     }
 
+    if ($outputsavedir)
+    {
+        my $dir = "$outputsavedir";
+        mkdir "$dir";
+        my $subdir = $test->{'group'};
+        $subdir =~ s/ /-/g;
+        $subdir =~ s/\//_/g;
+        $dir = sprintf "%s/%03d_%s", $dir, $test->{'group-index'}, $subdir;
+        mkdir "$dir";
+        my $leaf = $name;
+        $name =~ s/ /-/g;
+        $name =~ s/\//_/g;
+        my $path = sprintf "%s/%03d_%s.log", $dir, $test->{'test-index'}, $leaf;
+
+        open(my $fh, "> $path") || die "Cannot open output save file '$path': $!";
+        print $fh $output;
+        close($fh);
+    }
+
     return 2 if ($sig);
     return $fail ? 1 : 0;
 }
@@ -496,6 +717,19 @@ sub write_junitxml
     my $nerrors = 0;
     my $nfailures = 0;
     my $ntests = 0;
+    my $nskipped = 0;
+
+    my %result_tag_name = (
+            'pass' => undef,
+            'skip' => 'skipped',
+            'fail' => 'failure',
+            'crash' => 'error',
+        );
+    my %has_message = (
+            'skip' => 0,
+            'fail' => 1,
+            'crash' => 1,
+        );
 
     # sum the counts for the top level testsuite
     for my $group (@groups)
@@ -503,18 +737,21 @@ sub write_junitxml
         $nerrors += $group->{'crash'};
         $nfailures += $group->{'fail'};
         $ntests += $group->{'pass'} + $nerrors + $nfailures;
+        $nskipped += $group->{'skip'};
     }
 
-    open(my $fh, "> $output") || die "Cannot write JunitXML file '$output': $!";
+    open(my $fh, "> $output") || die "Cannot write JunitXML: $!";
 
     print $fh "<?xml version=\"1.0\"?>\n";
+    # FIXME: Should skipped be mapped to 'disabled' at the top level?
     print $fh "<testsuites tests=\"$ntests\" failures=\"$nfailures\" errors=\"$nerrors\">\n";
     for my $group (@groups)
     {
         $nerrors = $group->{'crash'};
         $nfailures = $group->{'fail'};
         $ntests = $group->{'pass'} + $nerrors + $nfailures;
-        print $fh "  <testsuite name=\"$group->{'group'}\" tests=\"$ntests\" failures=\"$nfailures\" errors=\"$nerrors\">\n";
+        $nskipped = $group->{'skip'};
+        print $fh "  <testsuite name=\"$group->{'group'}\" tests=\"$ntests\" failures=\"$nfailures\" errors=\"$nerrors\" skipped=\"$nskipped\">\n";
         for my $test (@{ $group->{'tests'} })
         {
             next if (!defined $test->{'result'});
@@ -527,12 +764,20 @@ sub write_junitxml
             {
                 my $message = "$test->{'result'}: $test->{'result_message'}";
                 print $fh ">\n";
-                my $tag = $test->{'result'} eq 'fail' ? 'failure' : 'error';
-                print $fh "      <$tag message=\"$message\">";
-                my $output = "$test->{'result_output'}";
-                # Escape any ]]> that might confuse the CDATA
-                $output =~ s/]]>/]]]]><!\[CDATA\[>/g;
-                print $fh "<![CDATA[${output}]]>\n;";
+                my $tag = $result_tag_name{ $test->{'result'} };
+                print $fh "      <$tag";
+                if ($has_message{ $test->{'result'} })
+                {
+                    print $fh " message=\"$message\"";
+                }
+                print $fh ">";
+                my $output = $test->{'result_output'};
+                if ($output)
+                {
+                    # Escape any ]]> that might confuse the CDATA
+                    $output =~ s/]]>/]]]]><!\[CDATA\[>/g;
+                    print $fh "<![CDATA[${output}]]>\n;";
+                }
                 print $fh "      </$tag>\n";
                 print $fh "    </testcase>\n";
             }
@@ -577,11 +822,11 @@ sub readword
     }
     if ($cfd->{'reverse'})
     {
-        $word = unpack 'n', $word;
+        $word = unpack 'N', $word;
     }
     else
     {
-        $word = unpack 'v', $word;
+        $word = unpack 'V', $word;
     }
     if ($word < 0)
     {
@@ -932,14 +1177,154 @@ sub text_check
         my $native_expect = native_filename($args->{'matches'});
         if ($txt ne $expected)
         {
-            open(my $fh, "> $native_expect-actual");
+            open(my $fh, "> $native_expect-actual")
+                || die "Cannot write actual output content '$native_expect-actual': $!";
             print $fh $txt;
             close($fh);
-            return "Does not match expected text file";
+            return "Does not match expected text file (see $native_expect-actual)";
         }
         else
         {
             unlink "$native_expect-actual"
+        }
+    }
+
+    return undef;
+}
+
+#######################################################################
+
+# Binary-specific settings
+
+
+sub binary_load
+{
+    my ($filename) = @_;
+    my $bin = {
+            'filename' => $filename,
+            'data' => read_file($filename, 'generated binary file'),
+            'size' => -s $filename,
+        };
+
+    return $bin;
+}
+
+
+##
+# Read a word from the file
+sub binary_word
+{
+    my ($bin, $offset) = @_;
+    if ($offset + 4 > $bin->{'size'})
+    {
+        die "Word offset '$offset' is outside binary file (length $bin->{'size'})";
+    }
+    my $word = substr($bin->{'data'}, $offset, 4);
+    my $value = unpack('V', $word);
+    return $value;
+}
+
+
+##
+# Read a byte from the file
+sub binary_byte
+{
+    my ($bin, $offset) = @_;
+    if ($offset + 4 > $bin->{'size'})
+    {
+        die "Byte offset '$offset' is outside binary file (length $bin->{'size'})";
+    }
+    my $word = substr($bin->{'data'}, $offset, 1);
+    my $value = unpack('C', $word);
+    return $value;
+}
+
+
+##
+# Read a string from the file
+sub binary_string
+{
+    my ($bin, $offset) = @_;
+    if ($offset + 1 > $bin->{'size'})
+    {
+        die "String offset '$offset' is outside binary file (length $bin->{'size'})";
+    }
+    my $str = substr($bin->{'data'}, $offset);
+    my $value = unpack('Z*', $str);
+    return $value;
+}
+
+
+# Checking function
+
+sub binary_check
+{
+    my ($filename, $args) = @_;
+
+    my $bin = binary_load($filename);
+
+    if ($args->{'checkfile'})
+    {
+        my $native_expect = native_filename($args->{'checkfile'});
+        open(my $fh, "< $native_expect") || die "Cannot read binary check file '$native_expect': $!\n";
+        my @fail;
+        while (<$fh>)
+        {
+            chomp;
+            if (/^ *#/)
+            {
+                # Comment line
+                next;
+            }
+            if (! s/^([0-9a-fx&]+) +//i)
+            {
+                die "Unrecognised offset in: '$_'\n";
+            }
+            my $offset = number($1);
+
+            if (/word: (.*)$/i)
+            {
+                my $expect = $1;
+                $expect = number($expect);
+                my $value = binary_word($bin, $offset);
+                if ($expect != $value)
+                {
+                    push @fail, sprintf "Word at offset 0x%x was 0x%08x, expected 0x%08x", $offset, $value, $expect;
+                }
+            }
+            elsif (/byte: (.*)$/i)
+            {
+                my $expect = $1;
+                $expect = number($expect);
+                my $value = binary_byte($bin, $offset);
+                if ($expect != $value)
+                {
+                    push @fail, sprintf "Byte at offset 0x%x was 0x%02x, expected 0x%02x", $offset, $value, $expect;
+                }
+            }
+            elsif (/string: (.*)$/i)
+            {
+                my $expect = $1;
+                my $value = binary_string($bin, $offset);
+                if ($expect ne $value)
+                {
+                    push @fail, sprintf "String at offset 0x%x was '%s', expected '%s'", $offset, $value, $expect;
+                }
+            }
+            else
+            {
+                die "Unrecognised binary checkfile directive: $_";
+            }
+        }
+        close($fh);
+        if (@fail)
+        {
+            my $number = scalar(@fail);
+            if ($number > 1)
+            {
+                return "$number binary checks failed:\n" . join("\n", @fail);
+            }
+            return $fail[0];
         }
     }
 
@@ -955,14 +1340,35 @@ sub text_check
 # NOTE: On RISC OS, this is destructive, as there is only one CWD.
 chdir "$dir";
 
+# Ensure we output immediately, so that stderr appears in a sane place
+$| = 1;
+
 my $pass = 0;
 my $fail = 0;
 my $crash = 0;
+my $skip = 0;
 for my $group (@groups)
 {
+    if ($group->{'skip'})
+    {
+        # No need to mark individual tests; they will have been
+        # flagged as skipped already.
+        $group->{'skip'} = scalar(@{ $group->{'tests'} });
+        $skip += $group->{'skip'};
+        next;
+    }
     print "$group->{'group'}:\n";
+    $group->{'skip'} = 0;
     for my $test (@{ $group->{'tests'} })
     {
+        if ($test->{'skip'})
+        {
+            # The command line matching requested skipping
+            $group->{'skip'}++;
+            $test->{'result'} = 'skip';
+            $skip++;
+            next;
+        }
         my $state = run_test($test);
         if ($state == 0)
         {
@@ -979,14 +1385,32 @@ for my $group (@groups)
             $group->{'crash'}++;
             $crash++;
         }
+        elsif ($state == -1)
+        {
+            $group->{'skip'}++;
+            $skip++;
+        }
     }
 }
 
 print "\n";
 print "-----------\n";
-print "Pass:  $pass\n";
-print "Fail:  $fail\n";
-print "Crash: $crash\n";
+printf "Pass:  %6i\n", $pass;
+printf "Fail:  %6i\n", $fail;
+printf "Crash: %6i\n", $crash;
+printf "Skip:  %6i\n", $skip;
+print "-----------\n";
+my $total = $pass + $fail + $crash;
+printf "Total run:   %6i\n", $total;
+if ($total != 0)
+{
+    printf "Pass ratio:  %6.2f %%\n", 100 * $pass / $total;
+    printf "Fail ratio:  %6.2f %%\n", 100 * $fail / $total;
+    if ($crash)
+    {
+        printf "Crash ratio: %6.2f %%\n", 100 * $crash / $total;
+    }
+}
 
 if ($junitxml)
 {

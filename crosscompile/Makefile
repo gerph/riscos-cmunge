@@ -47,10 +47,10 @@ OBJS = \
 all: $(COMPONENT)
 links: $(FILES)
 
-native_export:
+cross_export:
 	@echo No exports
 
-native_install: \
+cross_install: \
 		tool_dir \
 		test \
 		$(ROTOOL_DIR)/$(COMPONENT)
