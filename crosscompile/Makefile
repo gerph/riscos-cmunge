@@ -42,7 +42,7 @@ OBJS = \
   writefile.o \
   writeheader.o
 
-.PHONY: all links
+.PHONY: all links cross_export cross_install tool_dir clean
 
 all: $(COMPONENT)
 links: $(FILES)
