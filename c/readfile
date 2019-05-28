@@ -700,8 +700,10 @@ static void read_commands(const char *s, FILE *file) {
   }
   l = &opt.commands;
   while (*s != 0) {
+    char *command_name;
     *l = Malloc(sizeof(**l));
     s = strduptok(s, &(*l)->name);
+    command_name = (*l)->name;
     s = strskip(s, '(');
     (*l)->min_args       = -1;
     (*l)->max_args       = -1;
@@ -748,7 +750,7 @@ static void read_commands(const char *s, FILE *file) {
           continue;
 
         } else {
-          ErrorFatal("Unknown argument in command-description: %s", s);
+          ErrorFatal("Unknown argument in command-description of '%s': %s", command_name, s);
           break;
         }
       }
@@ -758,9 +760,9 @@ static void read_commands(const char *s, FILE *file) {
       if (field->hgtype==0)
         ErrorFatal("%s is not supported by any header generator (programmer error)",field->name);
       if (!(field->hgtype & IN_CMUNGE))
-        ErrorFatal("%s is not supported by CMunge in command-keyword-table",field->name);
+        ErrorFatal("%s is not supported by CMunge in command-keyword-table of '%s'",field->name, command_name);
       if (!(field->hgtype & IN_CMHG) && (opt.cmhg))
-        CMHGWarning("%s used in command-keyword-table",field->name);
+        CMHGWarning("%s used in command-keyword-table of '%s'",field->name, command_name);
 
       if (field->values.func)
       { /* We have a function for special processing of this field, so we
@@ -769,8 +771,8 @@ static void read_commands(const char *s, FILE *file) {
         if (field->values.type==ft_check)
         { /* They've asked us to check dupe declarations, so we'd better */
           if (*value != 0)
-            ErrorFatal("Only supply one %s field in command-keyword-table!",
-                       field->name);
+            ErrorFatal("Only supply one %s field in command-keyword-table of '%s'",
+                       field->name, command_name);
         }
         s = field->values.func(s,(*l));
       }
@@ -807,7 +809,7 @@ static void read_commands(const char *s, FILE *file) {
               {
                 /* You might like to add On/Off checking here to add some nicer
                    user interface for it */
-                ErrorFatal("Trailing junk after %s",field->name);
+                ErrorFatal("Trailing junk after %s in command-keyword-table of '%s'",field->name, command_name);
               }
             }
             break;
@@ -816,12 +818,12 @@ static void read_commands(const char *s, FILE *file) {
             {
               unsigned int *value=(unsigned int *)valuep;
               if (*value!=0)
-                ErrorFatal("Only supply one %s field in command-keyword-table!",field->name);
+                ErrorFatal("Only supply one %s field in command-keyword-table of '%s'",field->name, command_name);
               tail = strint(tail, value);
               if (*value==0)
-                ErrorFatal("Illegal %s: %i in command-keyword-table", field->name,*value);
+                ErrorFatal("Illegal %s: %i in command-keyword-table of '%s'", field->name,*value, command_name);
               if (*tail!='\0' && *tail!=',' && *tail!=')')
-                ErrorFatal("Trailing junk after %s in command-keyword-table",field->name);
+                ErrorFatal("Trailing junk after %s in command-keyword-table of '%s'",field->name, command_name);
             }
             break;
 
@@ -829,12 +831,12 @@ static void read_commands(const char *s, FILE *file) {
             {
               unsigned int *value=(unsigned int *)valuep;
               if (*value!=-1)
-                ErrorFatal("Only supply one %s field in command-keyword-table!",field->name);
+                ErrorFatal("Only supply one %s field in command-keyword-table of '%s'",field->name, command_name);
               tail = strint(tail, value);
               if (*value==-1)
-                ErrorFatal("Illegal %s: %i in command-keyword-table", field->name,*value);
+                ErrorFatal("Illegal %s: %i in command-keyword-table of '%s'", field->name,*value, command_name);
               if (*tail!='\0' && *tail!=',' && *tail!=')')
-                ErrorFatal("Trailing junk after %s in command-keyword-table",field->name);
+                ErrorFatal("Trailing junk after %s in command-keyword-table of '%s'",field->name, command_name);
             }
             break;
 
@@ -843,14 +845,14 @@ static void read_commands(const char *s, FILE *file) {
             {
               unsigned int *value=(unsigned int *)valuep;
               if (*value!=0)
-                ErrorFatal("Only supply one %s field in command-keyword-table!",field->name);
+                ErrorFatal("Only supply one %s field in command-keyword-table of '%s'",field->name, command_name);
               tail = strint(tail, value);
               if ((*value==0) || (*value & 0x3f))
-                ErrorFatal("Illegal %s: 0x%08x in command-keyword-table", field->name,*value);
+                ErrorFatal("Illegal %s: 0x%08x in command-keyword-table of '%s'", field->name,*value, command_name);
               if ((field->values.type==ft_xint64) && (*value & 0x20000))
-                ErrorFatal("Illegal %s: 0x%08x (x bit set) in command-keyword-table", field->name,*value);
+                ErrorFatal("Illegal %s: 0x%08x (x bit set) in command-keyword-table of '%s'", field->name, *value, command_name);
               if (*tail!='\0' && *tail!=',' && *tail!=')')
-                ErrorFatal("Trailing junk after %s in command-keyword-table",field->name);
+                ErrorFatal("Trailing junk after %s in command-keyword-table of '%s'",field->name, command_name);
             }
             break;
 
@@ -859,14 +861,14 @@ static void read_commands(const char *s, FILE *file) {
             {
               char **value=(char **)valuep;
               if (*value!=NULL)
-                ErrorFatal("Only supply one %s field in command-keyword-table!",field->name);
+                ErrorFatal("Only supply one %s field in command-keyword-table of '%s'",field->name, command_name);
 
               if (field->values.type==ft_label)
                 tail = strduptok(tail, value);
               else
                 tail = strstring(tail, value);
               if (*tail!='\0' && *tail!=',' && *tail!=')')
-                ErrorFatal("Trailing junk after %s in command-keyword-table",field->name);
+                ErrorFatal("Trailing junk after %s in command-keyword-table of '%s'",field->name, command_name);
             }
             break;
 
@@ -874,7 +876,7 @@ static void read_commands(const char *s, FILE *file) {
             {
               char **value=(char **)valuep;
               if (*value!=NULL)
-                ErrorFatal("Only supply one %s field in command-keyword-table!",field->name);
+                ErrorFatal("Only supply one %s field in command-keyword-table of '%s'",field->name, command_name);
 
               *value=strdup_strip(tail);
             }
@@ -883,8 +885,8 @@ static void read_commands(const char *s, FILE *file) {
           default:
             /* Erm... what the hell have you done to my nice little description
                block */
-            ErrorFatal("Programmer confusion error (%s:%s: ft: %i) in command-keyword-table",
-                       field->name,s,field->values.type);
+            ErrorFatal("Programmer confusion error (%s:%s: ft: %i) in command-keyword-table of '%s'",
+                       field->name,s, field->values.type, command_name);
         }
 
         s = tail;
@@ -920,21 +922,21 @@ static void read_commands(const char *s, FILE *file) {
 
     /* Check the sanity of these settings */
     if ((*l)->min_args > 255)
-      ErrorFatal("min-args: must be between 0 and 255 in command %s",(*l)->name);
+      ErrorFatal("min-args: must be between 0 and 255 in command %s", command_name);
     if ((*l)->max_args > 255)
-      ErrorFatal("max-args: must be between 0 and 255 in command %s",(*l)->name);
+      ErrorFatal("max-args: must be between 0 and 255 in command %s", command_name);
     if ((*l)->gstrans > 255)
-      ErrorFatal("gstrans: mapping may only describe 8 bits in command %s",(*l)->name);
+      ErrorFatal("gstrans: mapping may only describe 8 bits in command %s", command_name);
     if ((*l)->add_syntax && (*l)->international)
-      ErrorFatal("add-syntax: and international: are mutually exclusive in command %s",(*l)->name);
+      ErrorFatal("add-syntax: and international: are mutually exclusive in command %s", command_name);
     if ((*l)->add_syntax && !(*l)->invalid_syntax)
-      Warning("add-syntax: has no meaning without invalid-syntax: in command %s",(*l)->name);
+      Warning("add-syntax: has no meaning without invalid-syntax: in command %s", command_name);
     if ((*l)->add_syntax && !(*l)->help_text)
-      Warning("add-syntax: has no meaning without help-text: in command %s",(*l)->name);
+      Warning("add-syntax: has no meaning without help-text: in command %s", command_name);
     if ((*l)->help)
-      ErrorFatal("help: is not supported in command %s (unsupported in CMunge, unreliable in CMHG)", (*l)->name);
+      ErrorFatal("help: is not supported in command %s (unsupported in CMunge, unreliable in CMHG)", command_name);
     if ((*l)->no_handler && (*l)->handler)
-      ErrorFatal("no-handler: and handler: are mutually exclusive in command %s",(*l)->name);
+      ErrorFatal("no-handler: and handler: are mutually exclusive in command %s", command_name);
     if (opt.helpfn == NULL && (*l)->handler==NULL && (*l)->no_handler==0)
       (*l)->no_handler = 1; /* Silently promote to 'no-handler' if nothing
                                present */

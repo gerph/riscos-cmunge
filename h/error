@@ -3,13 +3,24 @@
  */
 
 #ifndef ERROR_H
-
 #define ERROR_H
 
-void ErrorFatal(char *err, ...);
+void ErrorFatal(char *err, ...)
+#if defined(__clang__) || defined(__GNUC__)
+    __attribute__ ((format (printf, 1, 2)));
+#endif
+    ;
 
-void Warning(char *err, ...);
+void Warning(char *err, ...)
+#if defined(__clang__) || defined(__GNUC__)
+    __attribute__ ((format (printf, 1, 2)));
+#endif
+    ;
 
-void CMHGWarning(char *err, ...);
+void CMHGWarning(char *err, ...)
+#if defined(__clang__) || defined(__GNUC__)
+    __attribute__ ((format (printf, 1, 2)))
+#endif
+    ;
 
 #endif
