@@ -1059,10 +1059,12 @@ void WriteHeader(void) {
     fprintf(file, "#define _CMUNGE_%s_H_\n\n",name);
   }
 
-  if (opt.oslib)
+  if (opt.oslib == 0)
+    fprintf(file, "#include \"kernel.h\"\n\n");
+  else if (opt.oslib == 1)
     fprintf(file, "#include \"oslib/os.h\"\n\n");
   else
-    fprintf(file, "#include \"kernel.h\"\n\n");
+    fprintf(file, "#include \"OSLib:Core/os.h\"\n\n");
 
   fprintf(file, "#define CMUNGE_VERSION (%i)\n",Module_Version);
   fprintf(file, "#define CMHG_VERSION   (531) /* Nearest equivalent version */\n\n");

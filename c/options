@@ -108,6 +108,7 @@ static void help_text(void) {
 "\t-zerrors      \bDefine errors and veneers only (for use in applications).\n"
 "\t-zoslib       \bUse '#include \"oslib/os.h\"' (OSLib) instead of "
                  "'#include \"kernel.h\"' (Acorn) in generated C header file.\n"
+"\t-zoslibpath   \bUse '#include \"OSLib:Core/os.h\"'.\n"
 "\t-blank        \bGenerate a blank cmhg file to infile.\n"
 "\t-cmhg         \bGive warnings for non-CMHG values.\n"
 "\t-tgcc         \bUse GCC tool chain to generate output.\n"
@@ -286,12 +287,14 @@ void Options_CL(int argc, char *argv[]) {
       arg = &argv[i][sizeof("-z")-1];
       if (stricmp("oslib", arg)) {
         opt.oslib = 1;
+      } else if (stricmp("oslibpath", arg)) {
+        opt.oslib = 2;
       } else if (stricmp("base", arg)) {
         opt.base = 1;
       } else if (stricmp("errors", arg)) {
         opt.mode_errors = 1;
       } else {
-        ErrorFatal("Unknown tweak option -z");
+        ErrorFatal("Unknown tweak option -z '%s'", arg);
       }
     } else if (strcmp("-32bit", argv[i])==0) { /* case sensitive */
       opt.apcs|= APCS_32BIT;

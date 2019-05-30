@@ -30,6 +30,7 @@ Options:
   -zoslib            Use '#include "oslib/os.h"' (OSLib) instead of
                      '#include "kernel.h"' (Acorn) in generated C header
                      file.
+  -zoslibpath        Use '#include "OSLib:Core/os.h"'.
   -blank             Generate a blank cmhg file to infile.
   -cmhg              Give warnings for non-CMHG values.
   -tgcc              Use GCC tool chain to generate output.
