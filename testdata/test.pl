@@ -221,7 +221,7 @@ if (!defined $testtool ||
     exit 1;
 }
 
-my $extensions_re = "s|c|h|cmhg|s_c|o|aof|bin";
+my $extensions_re = "s|c|h|cmhg|s_c|o|aof|bin|x";
 
 my ($none, $testtoolname) = ($testtool =~ /(^|\/)([^\/]*)$/);
 
@@ -350,18 +350,24 @@ sub setup_variables
     {
         $vars->{'OFILE'} = '';
         $vars->{'SFILE'} = '';
+        $vars->{'CFILE'} = '';
+        $vars->{'HFILE'} = '';
         $vars->{'BASE'} = '';
     }
     elsif ($test->{'file'} =~ /(^|.*\.)($extensions_re)\.(.*)/)
     {
         $vars->{'OFILE'} = "$1o.$3";
         $vars->{'SFILE'} = "$1s.$3";
+        $vars->{'CFILE'} = "$1c.$3";
+        $vars->{'HFILE'} = "$1h.$3";
         $vars->{'BASE'} = "$3";
     }
     elsif ($test->{'file'} =~ /^(^|.*\/)($extensions_re)\/(.*)/)
     {
         $vars->{'OFILE'} = "$1o/$3";
         $vars->{'SFILE'} = "$1s/$3";
+        $vars->{'CFILE'} = "$1c/$3";
+        $vars->{'HFILE'} = "$1h/$3";
         $vars->{'BASE'} = "$3";
     }
     else
@@ -395,7 +401,7 @@ sub substitute
     my ($str, $vars, $escapetype) = @_;
     return $str if (!defined $str);
 
-    $str =~ s/(^|[^\\])\$([A-Z]+)/$1 . escape($vars->{$2}, $escapetype) || die "Variable '$1' not defined in '$str'"/eg;
+    $str =~ s/(^|[^\\])\$([A-Z]+)/$1 . (escape($vars->{$2}, $escapetype) || die "Variable '$2' not defined in '$str'")/eg;
     return $str;
 }
 
