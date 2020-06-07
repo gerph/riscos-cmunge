@@ -29,8 +29,7 @@ variables:
     <<: *artifacts
     reports:
       junit:
-        # The Tests for cc generates a JunitXML output file.
-        - artifacts/results.xml
+        - ci-logs/*.xml
 
 
 #### Builds ####

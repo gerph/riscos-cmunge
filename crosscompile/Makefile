@@ -8,6 +8,7 @@ CDEFINES += -DBUILD_VERSION=\"$(CI_BRANCH_VERSION)\"
 endif
 PLATFORM_CFLAGS ?= -fPIC
 CFLAGS = -g $(PLATFORM_CFLAGS) -funsigned-char $(INCS)
+JUNITXML ?= ../artifacts/results.xml
 
 FILES = \
 	apcscli.c apcscli.h assemble.c assemble.h \
@@ -65,7 +66,7 @@ tool_dir:
 test: $(COMPONENT)
 	mkdir -p ../testdata/o
 	mkdir -p ../artifacts
-	perl ../testdata/test.pl --junitxml ../artifacts/results.xml --show-command --show-output $(shell pwd)/$(COMPONENT) ../testdata
+	perl ../testdata/test.pl --junitxml "${JUNITXML}" --show-command --show-output $(shell pwd)/$(COMPONENT) ../testdata
 
 clean:
 	-rm -f *.c *.h VersionNum *.o $(COMPONENT)

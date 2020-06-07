@@ -58,6 +58,8 @@
 #       - Begin a test definition
 # Command: <command>
 #       - Command to execute
+# Capture:
+#       - What we capture from the command ('stdout', 'stderr', 'both'), default 'both'
 # File: <source filename>
 #       - Source filename to apply
 # Args: <arguments>
@@ -65,16 +67,25 @@
 #         command line
 # Expect: <expectation filename>
 #       - File to compare the output to
-# Replace: <replacements filename>
-#       - File containing regular expressions to filter output before
-#         comparing to Expectation file. Replacement lines may be
-#         commented with a '#' prefix.
-# Creates: <output file>
-#       - Specify a name of a file that is expected to be created.
-#         If it's not present, the test fails.
+# Replace: <replacements script filename>
+#       - File containing a script of regular expressions and commands to
+#         filter output before comparing to Expectation file. See the
+#         section below on replacement scripts.
+# Creates: <output file(s)>
+#       - Specify a name of a file (or files, space separated) that is/are
+#         expected to be created.
+#         They will be removed before the test runs, and after it completes.
+#         If they are not present, the test fails.
 # Length: <length of the created file>
-#       - Expected length of the file; if it doesn't match, the test
-#         will fail
+#       - Expected length of the created file; if it doesn't match, the
+#         test will fail. Must match all files marked as Creates.
+# Removes: <output file>
+#       - Specify a name of a file that is expected to be removed.
+#         An empty file will be created before the test run.
+#         If the file is still there when the test completes, the test fails.
+# Absent: <output file>
+#       - Specify a name of a file that is expected to not be present.
+#         If the file is there when the test completes, the test fails.
 # RC: <return code expected>
 #       - Expected return code; if it's different the test will fail
 #         Otherwise, the test must return 0.
@@ -83,12 +94,15 @@
 # InputLine: <line>
 #       - A string to supply to the tool, which will be followed by
 #         a newline
+# Env: <variable>=<value
+#       - Define an environment variable which will be set for the
+#         test execution. May be repeated to set multiple variables.
 # Disable: <message>
 #       - Disable a test (or the group), with a message
 # <checker>:<parameter>: <argument>
 #       - Provide parameters to a specific checker.
 #
-# All of the arguments can has values substituted into them.
+# All of the arguments can have values substituted into them.
 # The following substitutions are available:
 #
 #   $TOOL
@@ -123,6 +137,38 @@
 #   alf:files: <number of files>
 #       - The number of files in the library
 #
+# - 'elf' checker:
+#
+#   elf:endianness: little|big
+#       - Check the endianess matches
+#   elf:entry: <address>
+#       - Address of the entry point
+#   elf:type: <type>
+#       - Object file type (1=> relative, 2=> executable)
+#   elf:osabi: <version>
+#       - OS/ABI version number (0=> no special interpretation, 64=> uses symbol versioning)
+#   elf:phoff: <offset>
+#       - Program header offset
+#   elf:shoff: <offset>
+#       - Section header offset
+#   elf:ehsize: <offset>
+#       - ELF header size (should always be 52)
+#   elf:flags: <flags>
+#       - Flags; for ARM these are a bitfield (not interpreted here)
+#   elf:phentsize: <size>
+#       - Size of each program header entry
+#   elf:phnum: <count>
+#       - Number of program header entries
+#   elf:shentsize: <size>
+#       - Size of each sectionheader entry
+#   elf:shnum: <count>
+#       - Number of section header entries
+#   elf:shstrndx: <count>
+#       - Index of the string section header
+#
+#    See:
+#       http://infocenter.arm.com/help/topic/com.arm.doc.ihi0044f/IHI0044F_aaelf.pdf
+#
 # - 'text' checker:
 #
 #   text:matches: <filename>
@@ -140,9 +186,49 @@
 #         lines describing the checks to perform, in the form:
 #           <offset> [word|byte|string>: <value>
 #
+# Replacement script syntax:
+#
+# Replacement scripts are intended to process an output from the tool to give an output
+# which is able to be processed as an expectation. The script is similar in intent to
+# the `sed` tool.
+#
+#   - Lines starting with a '#' character, or containing only whitespace are ignored.
+#   - Each script contains line (called rules) which will be executed on every line of
+#     the processed file.
+#   - If the end of the rules is reached for a line, the line will be included within
+#     the output.
+#   - Directives are prefixed by a '%' symbol. Supported directives:
+#       - `include <file>`
+#   - Rules comprise two parts:
+#       - Conditions (the first part of the line)
+#       - Actions (the latter part of the line)
+#   - Conditions:
+#       - [<number>]-[<number>] or <number> for line range to apply rule to.
+#         Line numbers start at 1.
+#       - /<regular expression>/ for expression to match.
+#   - Actions:
+#       - `p` immediately include the line in the output, and move on to the next line
+#       - `q` immediately terminate all input processing (ends the output without this line).
+#       - `s/<from>/<to>/<options>` to perform a replacement on the content of the line.
+#       - `d` skip this line, and move on to the next line.
+#
 
-use warnings;
-use strict;
+
+# NOTE: This script is expected to run under perl 5.001, on RISC OS, as well as on
+#       modern perls on Linux and MacOS. As such a few allowances have been made:
+#           * The BEGIN block, below, allows us to not have the warnings or strict
+#             packages available.
+#           * The 'for' statements do not include the 'my' which is expected on later
+#             perl version, as it is implicit in the earlier versions.
+#           * mkdir must always be called with an octal mode.
+BEGIN {
+    eval "use warnings;";
+    eval "use strict;";
+}
+
+BEGIN {
+    eval "use Time::HiRes qw(time);";
+}
 
 my $testtool = undef;
 my $dir = undef;
@@ -166,6 +252,12 @@ my $outputsavedir = undef;
 
 # Name of the test script to execute
 my $testscript = "tests.txt";
+
+# Colour configuration
+my $reset_colour = "\e[0m";
+my $fail_colour = "\e[31m";
+my $crash_colour = "\e[35m";
+my $ok_colour = "\e[32m";
 
 # Generate Junit XML at the end? (the filename)
 my $junitxml = undef;
@@ -215,7 +307,7 @@ while ($arg = shift)
         elsif ($switch eq 'debug')
         {
             my @debug = split /, */, shift;
-            for my $debugname (@debug)
+            for $debugname (@debug)
             {
                 if ($debugname eq 'filename' || $debugname eq 'all')
                 { $debug_filename = 1; }
@@ -247,7 +339,7 @@ if (!defined $testtool ||
     print "Options:\n";
     print "    -verbose         Verbose output\n";
     print "    -quiet           Not verbose output\n";
-    print "    -scrpt <script>  Script file to read (default: 'tests.txt')\n";
+    print "    -script <script> Script file to read (default: 'tests.txt')\n";
     print "    -group <re>      Regular expression to match for group name\n";
     print "    -test <re>       Regular expression to match for test name\n";
     print "    -show-command    Show command executed\n";
@@ -257,16 +349,21 @@ if (!defined $testtool ||
     exit 1;
 }
 
-my $extensions_re = "s|hdr|c|h|cmhg|s_c|o|aof|bin|x";
+my $extensions_dir_re = "s|hdr|c|h|cmhg|s_c|o|aof|bin|x";
+my $extensions_re = "xml|log|txt";
 
 my ($none, $testtoolname) = ($testtool =~ /(^|\/)([^\/]*)$/);
 
-my %testparams = map { $_ => 1 } (
+# The parameters that are plain keys
+my %testparams = map { $_ => '$' } (
         'command',
+        'capture',
         'expect',
         'disable',
         'creates',
         'length',
+        'removes',
+        'absent',
         'rc',
         'file',
         'args',
@@ -274,14 +371,27 @@ my %testparams = map { $_ => 1 } (
         'input',
         'inputline',
     );
+# The parameters that are lists ('@') or hashes ('%')
+$testparams{'env'} = '%';
+
 
 my %checkers = (
         'text' => \&text_check,
         'aof' => \&aof_check,
         'alf' => \&alf_check,
+        'elf' => \&elf_check,
         'binary' => \&binary_check,
     );
 
+my $dirsep;
+if ($^O eq 'riscos')
+{
+    $dirsep = '.';
+}
+else
+{
+    $dirsep = '/';
+}
 my $tempbase;
 if ($^O eq 'riscos')
 {
@@ -294,7 +404,7 @@ else
 my %tempnames = ();
 
 END {
-    for my $name (keys %tempnames)
+    for $name (keys %tempnames)
     {
         unlink $name;
     }
@@ -394,13 +504,19 @@ sub parse_test_script
                     %$group,
                     'test-index' => scalar(@{$group->{'tests'}}),
                     'name' => $arg,
+                    'duration' => undef,
                 };
-            for my $key (keys %$test)
+            for $key (keys %$test)
             {
                 if (ref($test->{$key}) eq 'HASH')
                 {
                     # If the element was a hash, copy it.
                     $test->{$key} = { %{$test->{$key}} };
+                }
+                elsif (ref($test->{$key}) eq 'ARRAY')
+                {
+                    # And same if it was a list
+                    $test->{$key} = [ @{$test->{$key}} ];
                 }
             }
             push @{$group->{'tests'}}, $test;
@@ -414,13 +530,34 @@ sub parse_test_script
         }
         elsif (defined($testparams{lc $cmd}))
         {
+            $cmd = lc $cmd;
             if ($minus)
             {
-                undef $acc->{lc $cmd};
+                undef $acc->{$cmd};
             }
             else
             {
-                $acc->{lc $cmd} = $arg;
+                if ($testparams{$cmd} eq '@')
+                {
+                    if (!defined $acc->{$cmd})
+                    {
+                        $acc->{$cmd} = [];
+                    }
+                    push @{$acc->{$cmd}}, $arg
+                }
+                elsif ($testparams{$cmd} eq '%')
+                {
+                    if (!defined $acc->{$cmd})
+                    {
+                        $acc->{$cmd} = {};
+                    }
+                    my ($key, $value) = split(/=/, $arg, 2);
+                    $acc->{$cmd}->{$key} = $value;
+                }
+                else
+                {
+                    $acc->{$cmd} = $arg;
+                }
             }
         }
         else
@@ -439,12 +576,13 @@ sub setup_variables
 
     $vars->{'TOOL'} = $testtool;
     $vars->{'FILE'} = $test->{'file'} || '';
-    $vars->{'ARGS'} = $test->{'args'} || '';
+    $vars->{'ARGS'} = defined($test->{'args'}) ? $test->{'args'} : '';
     my @args = split / +/, $vars->{'ARGS'};
     my $argn = 1;
-    for my $arg (@args)
+    for $arg (0..8)
     {
-        $vars->{'ARG' . $argn} = $arg;
+        my $value = $args[$arg];
+        $vars->{'ARG' . $argn} = defined $value ? $value : '';
         $argn++;
     }
     if (!$test->{'file'})
@@ -455,7 +593,7 @@ sub setup_variables
         $vars->{'HFILE'} = '';
         $vars->{'BASE'} = '';
     }
-    elsif ($test->{'file'} =~ /(^|.*\.)($extensions_re)\.(.*)/)
+    elsif ($test->{'file'} =~ /(^|.*\.)($extensions_dir_re)\.(.*)/)
     {
         $vars->{'OFILE'} = "$1o.$3";
         $vars->{'SFILE'} = "$1s.$3";
@@ -463,7 +601,7 @@ sub setup_variables
         $vars->{'HFILE'} = "$1h.$3";
         $vars->{'BASE'} = "$3";
     }
-    elsif ($test->{'file'} =~ /^(^|.*\/)($extensions_re)\/(.*)/)
+    elsif ($test->{'file'} =~ /^(^|.*\/)($extensions_dir_re)\/(.*)/)
     {
         $vars->{'OFILE'} = "$1o/$3";
         $vars->{'SFILE'} = "$1s/$3";
@@ -481,28 +619,104 @@ sub setup_variables
 
 
 ##
-# Perform escaping on a parameter.
+# Perform escaping on a string.
+#
+# The parameter is expected to be a command which we expect to be executed, almost verbatim.
+# Quotes may be included around a parameter to ensure that it is not split.
+# Any special characters will be escaped so that the shell passes them on.
+#
+# That is, the command line is as close to RISC OS format as is possible.
 #
 # @param $param         What to escape
 # @param $escapetype    How to escape:
 #                           0 => not at all
 #                           1 => shell escaping
-sub escape
+sub escape_parameters
 {
     my ($param, $escapetype) = @_;
     if (defined $escapetype && $escapetype == 1)
     {
-        $param =~ s/(['";&])/\\$1/g;
+        #print "ESCAPING: '$param'\n";
+        my @params = ($param =~ /([^" ]+|"(?:\\"|[^"])*"|[^ ]+)/g);
+        my @newparams = ();
+        push @newparams, shift(@params);
+        for $part (@params)
+        {
+            #print "PART: '$part'\n";
+            if ($part =~ /^"(?:\\"|[^"])*"$/)
+            {
+                # This is a quoted string, so we need to escape anything that would
+                # cause the shell problems.
+                if ($^O eq 'riscos')
+                {
+                    # Nothing to do.
+                }
+                else
+                {
+                    $part =~ s/([\$])/\\$1/g;
+                }
+            }
+            else
+            {
+                # This is a bare string or one that isn't quoted as expected,
+                # so we need to escape anything that would cause it problems.
+                if ($^O eq 'riscos')
+                {
+                    # Nothing to do.
+                }
+                else
+                {
+                    $part =~ s/([^a-zA-Z_\-+0-9\/\.,])/\\$1/g;
+                }
+            }
+            push @newparams, $part;
+        }
+        $param = join(' ', @newparams);
     }
     return $param;
 }
 
 sub substitute
 {
-    my ($str, $vars, $escapetype) = @_;
+    my ($str, $vars) = @_;
     return $str if (!defined $str);
 
-    $str =~ s/(^|[^\\])\$([A-Z]+[0-9]*)/$1 . (defined($vars->{$2}) ? escape($vars->{$2}, $escapetype) : '$' . $2)/eg;
+    # Perl 5.0 doesn't support negative look behind, so the escaping with \$ isn't easy
+    # to capture with a single regex, so we go to a lot of trouble to split the string up
+    # and process individual variables.
+    my @parts = split /\$/, $str;
+    my $escape = 0;
+    # For some reason Perl trims off any trailing elements if the split string appears
+    # at the end of the list. So we put them back as empty elements.
+    my ($trail) = ($str =~ /(\$+)$/);
+    if ($trail)
+    {
+        for $i (1..length($trail))
+        {
+            push @parts, '';
+        }
+    }
+    for $i (0..$#parts)
+    {
+        if ($escape)
+        {
+            $parts[$i - 1] =~ s/\\$/\$/;
+        }
+        elsif ($i != 0)
+        {
+            if ($parts[$i] =~ s/^([A-Z]+[0-9]*)/(defined($vars->{$1}) ? $vars->{$1} : '$' . $1)/e)
+            {
+                # We performed the replacement.
+            }
+            else
+            {
+                # The value wasn't actually a variable, so put the dollar back
+                $parts[$i] = '$' . $parts[$i];
+            }
+        }
+        $escape = ($parts[$i] =~ /\\$/);
+    }
+    $str = join "", @parts;
     return $str;
 }
 
@@ -521,35 +735,73 @@ sub number
 sub native_filename
 {
     my ($filename) = @_;
-    my $dirsep;
 
     die "No filename passed to native_filename" if (!defined $filename);
 
-    if ($^O eq 'riscos')
-    {
-        $dirsep = '.';
-    }
-    else
-    {
-        $dirsep = '/';
-    }
-
     print "('$filename'" if ($debug_filename);
-    if ($filename =~ /^(.*)\/($extensions_re)$/)
+    # First the directory exchanges
+    if ($filename =~ /^(.*)\/($extensions_dir_re)$/)
     { # Unix layout, RISC OS syntax
         $filename = "$2$dirsep$1";
     }
-    elsif ($filename =~ /^(.*)\.($extensions_re)$/)
+    elsif ($filename =~ /^(.*)\.($extensions_dir_re)$/)
     { # Unix layout, Unix syntax
         $filename = "$2$dirsep$1";
     }
-    elsif ($filename =~ /^($extensions_re)\/(.*)$/)
+    elsif ($filename =~ /^($extensions_dir_re)\/(.*)$/)
     { # RISCO OS layout, Unix syntax
         $filename = "$1$dirsep$2";
     }
-    elsif ($filename =~ /^($extensions_re)\.(.*)$/)
+    elsif ($filename =~ /^($extensions_dir_re)\.(.*)$/)
     { # RISC OS layout, RISC OS syntax
         $filename = "$1$dirsep$2";
+    }
+
+    # Now the replacements for the plain extension
+    # FIXME: I think this should probably also be performed on the prefix
+    #        in the above names.
+    elsif ($filename =~ /^(.*)\/($extensions_re)$/)
+    {
+        # RISCOS extension layout
+        if ($^O eq 'riscos')
+        {
+            # Nothing to do; we're already in the right format
+        }
+        else
+        {
+            while ($filename =~ s/([^\^\@\$\%\\\.]+)\.\^\.//)
+            {
+                # Strip off <dir>.^ from any components
+            }
+            # Exchange the dots and slashes.
+            $filename =~ tr!./!/.!;
+
+            # Any ^ that are left will be for the root, so replace these
+            $filename =~ s!\^/!../!g;
+
+            # Environment variables <sigh>
+            $filename =~ s/<(.*)\$Dir>/$ENV{uc "$1_DIR"} || die "No variable '$1' in '$filename'"/ieg;
+        }
+    }
+    elsif ($filename =~ /^(.*)\.($extensions_re)$/)
+    {
+        # Unix extension layout
+        if ($^O eq 'riscos')
+        {
+            # Convert to RISC OS format
+
+            # Exchange the dots and slashes.
+            $filename =~ tr!./!/.!;
+
+            while ($filename =~ s!//\.!^.!)
+            {
+                # Replace all the ../ with ^.
+            }
+        }
+        else
+        {
+            # Already in the correct format.
+        }
     }
     print " => '$filename' : $dirsep)" if ($debug_filename);
 
@@ -580,6 +832,45 @@ sub read_file
 }
 
 ##
+# Read a command file with directives and comments.
+#
+# @param $filename      Filename to process
+#
+# @return list of lines, having processed directives
+sub read_command_file
+{
+    my ($filename) = @_;
+    open(my $fh, "< $filename") || die "Cannot read file '$filename': $!";
+
+    my @lines;
+    while (<$fh>)
+    {
+        chomp;
+        next if (/^\s*$/ || /^#/);
+
+        # Process directives
+        if (/^%([a-z]+) ?(.*)$/)
+        {
+            my ($directive, $args) = ($1, $2);
+            if ($directive eq 'include')
+            {
+                my $nextfile = $args;
+                my $dir = $filename;
+                # FIXME: This isn't platform aware.
+                $dir =~ s/\/([^\/]*)$//;
+                $nextfile = "$dir/$nextfile";
+                push @lines, read_command_file($nextfile);
+            }
+            next;
+        }
+        push @lines, $_;
+    }
+    close($fh);
+    return @lines;
+}
+
+
+##
 # Apply a replacements file that contains simple replacements to fix up text.
 #
 # @param $replacements  Filename containing replacements
@@ -589,12 +880,46 @@ sub read_file
 sub apply_replacements
 {
     my ($replacements, $output) = @_;
-    open(my $fh, "< $replacements") || die "Cannot read replacements file '$replacements': $!";
-    while (<$fh>)
+    if (!-r "$replacements")
+    { die "Cannot read replacements file '$replacements': $!"; }
+    # Read in all the replacement lines, so that we can process them for the content.
+    my @replacement_lines = read_command_file($replacements);
+
+    my @replacement_code;
+    for $line (@replacement_lines)
     {
-        chomp;
-        next if (/^\s*$/ || /^#/);
-        if (m!^s([^a-zA-Z0-9])(.*[^\\]|)\1(.*[^\\]|)\1([mgs]?)$!)
+        my @conditions;
+        my @actions;
+        # Conditions for line numbers
+        if ($line =~ s!^([0-9]+|-[0-9]+|[0-9]+-[0-9+]) +!!)
+        {
+            # Applies to given lines
+            my $range = $1;
+            my $first = undef;
+            my $last = undef;
+            my $condition;
+            if ($range =~ /^[0-9]+$/)
+            { $condition = "\$index == $range"; }
+            elsif ($range =~ /^-([0-9]+)$/)
+            { $condition = "\$index <= $1"; }
+            elsif ($range =~ /^([0-9]+)-([0-9]+)$/)
+            { $condition = "\$index >= $1 && \$index <= $2"; }
+            elsif ($range =~ /^([0-9]+)-$/)
+            { $condition = "\$index >= $1"; }
+            push @conditions, $condition;
+        }
+
+        # Conditions for regular expression matches
+        if ($line =~ s!^([^a-zA-Z0-9])(.*[^\\]|)\1 +!!)
+        {
+            my ($delimiter, $match) = ($1, $2);
+            my $condition = "\$line =~ m$delimiter$match$delimiter";
+            push @conditions, $condition;
+        }
+
+        # Replacement action
+        my $action = 'die "undefined action!\n";';
+        if ($line =~ m!^s([^a-zA-Z0-9])(.*[^\\]|)\1(.*[^\\]|)\1([mgs]?)$!)
         {
             my $sym = $1;
             my $from = $2;
@@ -605,32 +930,70 @@ sub apply_replacements
             $to =~ s/\\$sym/$sym/g;
 
             print "REPLACE: '$from' => '$to' '$opts'\n" if ($debug_replace);
-            if (!defined $opts || $opts eq '')
-            {
-                $to =~ s!\/!\\/!g;
-                eval "\$output =~ s/\$from/$to/;";
-            }
-            elsif ($opts eq 'g')
-            {
-                $to =~ s!\/!\\/!g;
-                eval "\$output =~ s/\$from/$to/g;";
-            }
-            elsif ($opts eq 's' || $opts eq 'm')
-            {
-                # Treat both these options as the same thing,
-                # and applying globally.
-                $to =~ s!\/!\\/!g;
-                eval "\$output =~ s/\$from/$to/smg;";
-            }
+            $to =~ s!\/!\\/!g;
+            $from =~ s!/!\\/!g;
+            $action = "\$line =~ s/$from/$to/$opts;";
+        }
+
+        # Delete action
+        elsif ($line =~ m!^d$!)
+        {
+            $action = "next;";
+        }
+        elsif ($line =~ m!^p$!)
+        {
+            $action = "\$content .= \"\$line\\n\";\nnext;";
+        }
+        elsif ($line =~ m!^q$!)
+        {
+            $action = 'last;';
         }
         else
         {
-            die "Unrecognised replacement line: '$_'";
+            die "Unrecognised action line: '$line'";
         }
-    }
-    close($fh);
 
-    return $output;
+        # Build the replacement code.
+        my $code = '';
+        my $indent = '  ';
+        if (@conditions)
+        {
+            $code .= $indent . "if (" . join(' && ', @conditions) . ")\n$indent" . "{\n";
+            $indent .= '  ';
+        }
+        $action =~ s/\n/\n$indent/g;
+        $code .= "$indent$action\n";
+        if (@conditions)
+        {
+            $code .= "  }\n";
+        }
+        push @replacement_code, $code;
+    }
+
+    # Wrap the replacement code with the line iteratation
+    my $code = "my \$index = 0;\n";
+    $code .= "my (\$trailingblanks) = (\$output =~ /(\\n+)\$/);\n";
+    $code .= "my \@extralines;\n";
+    $code .= "if (length(\$trailingblanks || '') > 0)\n";
+    $code .= "{ \@extralines = (('') x (length(\$trailingblanks || '') - 1)); }\n";
+    $code .= "for \$line ((split /\\n/, \$output), \@extralines)\n{\n";
+    $code .= "  \$index++;\n";
+    #$code .= "  print \"LINE \$index: \$line\\n\";\n";
+    $code .= join("\n", @replacement_code);
+    if (@replacement_code)
+    {
+        $code .= "\n";
+    }
+    $code .= "  \$content .= \"\$line\\n\";\n";
+    $code .= "}\n1;\n";
+
+    print "SCRIPT:\n$code\n" if ($debug_replace);
+
+    # Run the replacements
+    my $content = '';
+    eval $code || die "Evaluation of replacements failed: $@";
+
+    return $content;
 }
 
 ##
@@ -653,8 +1016,11 @@ sub run_test
 
     my $name = $test->{'name'};
     my $disable = substitute($test->{'disable'}, $vars);
-    my $cmd = substitute($test->{'command'}, $vars, 1);
+    my $cmd = substitute($test->{'command'}, $vars);
+    my $capture = substitute($test->{'capture'} || 'both', $vars);
     my $creates = substitute($test->{'creates'}, $vars);
+    my $absent = substitute($test->{'absent'}, $vars);
+    my $removes = substitute($test->{'removes'}, $vars);
     my $length = substitute($test->{'length'}, $vars);
     my $expect = substitute($test->{'expect'}, $vars);
     my $replacements = substitute($test->{'replace'}, $vars);
@@ -666,8 +1032,20 @@ sub run_test
 
     if (defined($creates))
     {
-        $creates = native_filename($creates);
-        unlink($creates);
+        my @create_list = split / +/, $creates;
+        for $created (@create_list)
+        {
+            $created = native_filename($created);
+            unlink $created if (-f $created);
+            rmdir $created if (-d $created);
+        }
+    }
+    if (defined($removes))
+    {
+        $removes = native_filename($removes);
+        # We create the file to check that it's not there at the end.
+        open(my $fh, '>', $removes) || die "Cannot create '$removes' for 'removes' check: $!";
+        close($fh);
     }
 
     printf '  %-34s : ', $name;
@@ -683,10 +1061,33 @@ sub run_test
     }
 
     my $cmdtorun = $cmd;
-    if ($^O ne 'riscos')
+    if (!defined $cmd)
     {
-        # Make the parameters safe for unix-like shells
-        $cmdtorun =~ s/([$()&*?;~|`])/\\$1/g;
+        $test->{'result'} = 'crash';
+        $test->{'result_message'} = "No command defined";
+        print "${crash_colour}MISCONFIGURED: No command defined${reset_colour}\n";
+        return 2;
+    }
+
+    # Escape the command's parameters
+    $cmdtorun = escape_parameters($cmdtorun, 1);
+
+    # FIXME: Probably not correct for RISC OS?
+    if ($capture eq 'stdout')
+    {
+        $cmdtorun .= ' 2> /dev/null';
+    }
+    elsif ($capture eq 'stderr')
+    {
+        $cmdtorun .= ' 2>&1 > /dev/null';
+    }
+    elsif ($capture eq 'both')
+    {
+        $cmdtorun .= ' 2>&1';
+    }
+    else
+    {
+        die "Bad 'capture' specification: must be 'stdout', 'stderr' or 'both', not '$capture'\n";
     }
     if ($cmdtorun !~ / 2>/)
     {
@@ -699,18 +1100,42 @@ sub run_test
     elsif (defined $inputline)
     {
         $input = tempfilename('input');
+        my $inputactual = $inputline;
+        $inputactual =~ s/\\n/\n/g;
         open(my $infh, "> $input") || die "Cannot create temporary input file '$input': $!";
-        print $infh "$inputline\n";
+        print $infh "$inputactual\n";
         close($infh);
     }
     if (defined $input)
     {
+        # FIXME: Probably not correct for RISC OS?
         $cmdtorun .= " < $input";
     }
-    my $output = `$cmdtorun`;
-    my $sig = ($? & 255);
-    my $rc = $sig ? 128+$sig : ($? >> 8);
-    if ($? == -1)
+
+    my $output;
+    my $duration = undef;
+    my $status;
+    {
+        my $start_time = time();
+
+        # Set up the environment that we run the command under.
+        my %oldenv = %ENV;
+        if (defined $test->{'env'})
+        {
+            for $key (keys %{$test->{'env'}})
+            {
+                $ENV{$key} = $test->{'env'}->{$key};
+            }
+        }
+        #print "RUN: '$cmdtorun'\n";
+        $output = `$cmdtorun`;
+        $status = $?;
+        $test->{'duration'} = time() - $start_time;
+        %ENV = %oldenv;
+    }
+    my $sig = ($status & 255);
+    my $rc = $sig ? 128+$sig : ($status >> 8);
+    if ($status == -1)
     {
         # File not found
         $sig = -1;
@@ -745,35 +1170,60 @@ sub run_test
             unlink "$native_expect-actual"
         }
     }
+    if (!$fail && defined $removes)
+    {
+        if (-f $removes)
+        {
+            $fail = "Expected to remove $removes, but didn't";
+        }
+    }
+    if (!$fail && defined $absent)
+    {
+        if (-f $absent)
+        {
+            $fail = "Expected to not create $absent, but the file exists";
+        }
+    }
     if (!$fail && defined $creates)
     {
-        if (!-f $creates)
+        my @create_list = split / +/, $creates;
+        for $created (@create_list)
         {
-            $fail = "Expected to create $creates, but didn't";
-        }
-        elsif (defined $length)
-        {
-            my $gotlength = -s $creates;
-            if ($gotlength != $length)
+            $created = native_filename($created);
+            if (!-e $created)
             {
-                $fail = "Expected output length $length, but got $gotlength";
+                $fail = "Expected to create $created, but didn't";
+            }
+            elsif (defined $length)
+            {
+                # This only really works if there's a single file
+                my $gotlength = -s $created;
+                if ($gotlength != $length)
+                {
+                    $fail = "Expected output length $length, but got $gotlength";
+                }
             }
         }
 
         if (!$fail)
         {
-            for my $checker (keys %checkers)
+            for $checker (keys %checkers)
             {
                 if (defined $test->{$checker})
                 {
                     my %args = %{$test->{$checker}};
                     my $func = $checkers{$checker};
                     eval {
-                        for my $key (keys %args)
+                        if ($creates =~ / /)
+                        {
+                            die "Cannot use checkers with multiple 'Creates'\n";
+                        }
+                        my $created = native_filename($creates);
+                        for $key (keys %args)
                         {
                             $args{$key} = substitute($args{$key}, $vars);
                         }
-                        $fail = & $func ($creates, \%args);
+                        $fail = & $func ($created, \%args);
                     };
                     if ($@)
                     {
@@ -792,19 +1242,25 @@ sub run_test
         # Clear away the successfully created file.
         if (!$fail)
         {
-            unlink $creates;
+            my @create_list = split / +/, $creates;
+            for $created (@create_list)
+            {
+                $created = native_filename($created);
+                unlink $created if (-f $created);
+                rmdir $created if (-d $created);
+            }
         }
     }
     if ($fail)
     {
         if ($sig)
         {
-            print "CRASH: $fail\n";
+            print "${crash_colour}CRASH: $fail${reset_colour}\n";
             $test->{'result'} = 'crash';
         }
         else
         {
-            print "FAIL: $fail\n";
+            print "${fail_colour}FAIL: $fail${reset_colour}\n";
             $test->{'result'} = 'fail';
         }
         $test->{'result_message'} = $fail;
@@ -812,7 +1268,7 @@ sub run_test
     }
     else
     {
-        print "OK\n";
+        print "${ok_colour}OK${reset_colour}\n";
         $test->{'result'} = 'pass';
     }
     if ($verbose)
@@ -834,12 +1290,12 @@ sub run_test
     if ($outputsavedir)
     {
         my $dir = "$outputsavedir";
-        mkdir "$dir";
+        mkdir "$dir", 0755;
         my $subdir = $test->{'group'};
         $subdir =~ s/ /-/g;
         $subdir =~ s/\//_/g;
         $dir = sprintf "%s/%03d_%s", $dir, $test->{'group-index'}, $subdir;
-        mkdir "$dir";
+        mkdir "$dir", 0755;
         my $leaf = $name;
         $name =~ s/ /-/g;
         $name =~ s/\//_/g;
@@ -889,7 +1345,7 @@ sub write_junitxml
         );
 
     # sum the counts for the top level testsuite
-    for my $group (@groups)
+    for $group (@groups)
     {
         $nerrors += $group->{'crash'};
         $nfailures += $group->{'fail'};
@@ -897,22 +1353,41 @@ sub write_junitxml
         $nskipped += $group->{'skip'};
     }
 
+    print "Writing JUnitXML file to '$output'\n";
     open(my $fh, "> $output") || die "Cannot write JunitXML '$output': $!";
 
     print $fh "<?xml version=\"1.0\"?>\n";
     # FIXME: Should skipped be mapped to 'disabled' at the top level?
     print $fh "<testsuites tests=\"$ntests\" failures=\"$nfailures\" errors=\"$nerrors\">\n";
-    for my $group (@groups)
+    for $group (@groups)
     {
         $nerrors = $group->{'crash'};
         $nfailures = $group->{'fail'};
         $ntests = $group->{'pass'} + $nerrors + $nfailures;
         $nskipped = $group->{'skip'};
-        print $fh "  <testsuite name=\"" . xml_escape($group->{'group'}) . "\" tests=\"$ntests\" failures=\"$nfailures\" errors=\"$nerrors\" skipped=\"$nskipped\">\n";
-        for my $test (@{ $group->{'tests'} })
+        my $duration = 0;
+        for $test (@{ $group->{'tests'} })
+        {
+            next if (!defined $test->{'result'});
+            if (defined $test->{'duration'})
+            {
+                $duration += $test->{'duration'};
+            }
+        }
+        print $fh "  <testsuite name=\"" . xml_escape($group->{'group'}) . "\" tests=\"$ntests\" failures=\"$nfailures\" errors=\"$nerrors\" skipped=\"$nskipped\"";
+        if ($duration)
+        {
+            print $fh sprintf " time=\"%.2f\"", $duration;
+        }
+        print $fh ">\n";
+        for $test (@{ $group->{'tests'} })
         {
             next if (!defined $test->{'result'});
             print $fh "    <testcase classname=\"ToolTest\" name=\"" . xml_escape($test->{'name'}) . "\"";
+            if (defined $test->{'duration'})
+            {
+                print $fh sprintf " time=\"%.2f\"", $test->{'duration'};
+            }
             if ($test->{'result'} eq 'pass')
             {
                 print $fh " />\n";
@@ -933,7 +1408,7 @@ sub write_junitxml
                 {
                     # Escape any ]]> that might confuse the CDATA
                     $output =~ s/]]>/]]]]><!\[CDATA\[>/g;
-                    print $fh "<![CDATA[${output}]]>\n;";
+                    print $fh "<![CDATA[${output}]]>\n";
                 }
                 print $fh "      </$tag>\n";
                 print $fh "    </testcase>\n";
@@ -943,6 +1418,132 @@ sub write_junitxml
     }
     print $fh "</testsuites>\n";
     close($fh);
+}
+
+
+#######################################################################
+
+# General binary files (which may be extended by other users)
+
+##
+# Process a binary file
+sub binaryfile
+{
+    my ($filename) = @_;
+    my $bf = {
+            'filesize' => -s $filename,
+            'endian' => 'unknown',
+        };
+    open(my $bfh, "< $filename") || die "Cannot read chunk file '$filename'\n";
+    my $bfd = {
+            'fh' => $bfh,
+            'reverse' => 0,
+        };
+
+    $bf->{'bfd'} = $bfd;
+    return $bf;
+}
+
+
+##
+# Mark the binary file as little endian
+sub binary_littleend
+{
+    my ($bf) = (@_);
+    $bf->{'endian'} = 'little';
+    $bf->{'bfd'}->{'reverse'} = 0;
+}
+
+
+##
+# Mark the binary file as big endian
+sub binary_bigend
+{
+    my ($bf) = @_;
+    $bf->{'endian'} = 'big';
+    $bf->{'bfd'}->{'reverse'} = 1;
+}
+
+
+##
+# Read a 32bit word
+sub readword
+{
+    my ($cfd) = @_;
+    my $word;
+    if (sysread($cfd->{'fh'}, $word, 4) != 4)
+    {
+        die "Short read of word at offset " . (sysseek($cfd->{'fh'}, 0, 1));
+    }
+    if ($cfd->{'reverse'})
+    {
+        $word = unpack 'N', $word;
+    }
+    else
+    {
+        $word = unpack 'V', $word;
+    }
+    if ($word < 0)
+    {
+        die "Read a negative word?!";
+    }
+    return $word;
+}
+
+
+##
+# Read a 16bit word
+sub readshort
+{
+    my ($cfd) = @_;
+    my $word;
+    if (sysread($cfd->{'fh'}, $word, 2) != 2)
+    {
+        die "Short read of short";
+    }
+    if ($cfd->{'reverse'})
+    {
+        $word = unpack 'n', $word;
+    }
+    else
+    {
+        $word = unpack 'v', $word;
+    }
+    if ($word < 0)
+    {
+        die "Read a negative short?!";
+    }
+    return $word;
+}
+
+
+##
+# Read a byte
+sub readbyte
+{
+    my ($cfd) = @_;
+    my $word;
+    if (sysread($cfd->{'fh'}, $word, 1) != 1)
+    {
+        die "Short read of byte";
+    }
+    $word = ord($word);
+    if ($word < 0)
+    {
+        die "Read a negative short?!";
+    }
+    return $word;
+}
+
+
+##
+# Read a fixed length string
+sub readfixedstring
+{
+    my ($cfd, $len) = @_;
+    my $str;
+    sysread($cfd->{'fh'}, $str, $len);
+    return $str;
 }
 
 
@@ -968,79 +1569,34 @@ my $alf_directory = 'LIB_DIRY';
 
 
 ##
-# Read a 32bit word
-sub readword
-{
-    my ($cfd) = @_;
-    my $word;
-    if (sysread($cfd->{'fh'}, $word, 4) != 4)
-    {
-        die "Short read of word";
-    }
-    if ($cfd->{'reverse'})
-    {
-        $word = unpack 'N', $word;
-    }
-    else
-    {
-        $word = unpack 'V', $word;
-    }
-    if ($word < 0)
-    {
-        die "Read a negative words?!";
-    }
-    return $word;
-}
-
-##
-# Read a fixed length string
-sub readfixedstring
-{
-    my ($cfd, $len) = @_;
-    my $str;
-    sysread($cfd->{'fh'}, $str, $len);
-    return $str;
-}
-
-
-##
 # Process a chunk file
 sub chunkfile
 {
     my ($filename) = @_;
-    my $cf = {
-            'filesize' => -s $filename,
-            'endian' => 'unknown',
-            'MaxChunks' => 0,
-            'NumChunks' => 0,
-            'chunks' => [],
-            'chunknames' => {},
-        };
-    open(my $cfh, "< $filename") || die "Cannot read chunk file '$filename'\n";
-    my $cfd = {
-            'fh' => $cfh,
-            'reverse' => 0,
-        };
+    my $cf = binaryfile($filename);
+    my $cfd = $cf->{'bfd'};
+
+    $cf->{'MaxChunks'} = 0;
+    $cf->{'NumChunks'} = 0;
+    $cf->{'chunks'} = [];
+    $cf->{'chunknames'} = {};
 
     my $word = readword($cfd);
     if ($word == $ChunkFileId)
     {
-        $cf->{'endian'} = 'little';
+        binary_littleend($cf);
     }
     elsif ($word == $ChunkFileIdReverse)
     {
-        $cf->{'endian'} = 'big';
-        $cfd->{'reverse'} = 1;
+        binary_bigend($cf);
     }
 
-
-    $cf->{'cfd'} = $cfd;
     $cf->{'MaxChunks'} = readword($cfd);
     $cf->{'NumChunks'} = readword($cfd);
 
     my $filesize = $cf->{'filesize'};
 
-    for my $n (0..$cf->{'MaxChunks'}-1)
+    for $n (0..$cf->{'MaxChunks'}-1)
     {
         my $chunkid = readfixedstring($cfd, 8);
         my $fileoffset = readword($cfd);
@@ -1098,7 +1654,7 @@ my $aof_attribute_data_sharedshift = (24);
 sub aof_header
 {
     my ($cf) = @_;
-    my $cfd = $cf->{'cfd'};
+    my $cfd = $cf->{'bfd'};
     my $chunk = $cf->{'chunknames'}->{$aof_header};
     if (!defined $chunk)
     {
@@ -1116,7 +1672,7 @@ sub aof_header
 
     $chunk->{'totalAreaSize'} = 0;
 
-    for my $areanum (0..$chunk->{'NumberOfAreas'}-1)
+    for $areanum (0..$chunk->{'NumberOfAreas'}-1)
     {
         # 5 words per area
         my $area = {
@@ -1148,7 +1704,7 @@ sub aof_header
 sub aof_strings
 {
     my ($cf) = @_;
-    my $cfd = $cf->{'cfd'};
+    my $cfd = $cf->{'bfd'};
     my $chunk = $cf->{'chunknames'}->{$aof_strings};
     if (!defined $chunk)
     {
@@ -1167,7 +1723,7 @@ sub aof_strings
 sub aof_identification
 {
     my ($cf) = @_;
-    my $cfd = $cf->{'cfd'};
+    my $cfd = $cf->{'bfd'};
     my $chunk = $cf->{'chunknames'}->{$aof_identification};
     if (!defined $chunk)
     {
@@ -1215,7 +1771,7 @@ sub aof_check
 sub alf_directory
 {
     my ($cf) = @_;
-    my $cfd = $cf->{'cfd'};
+    my $cfd = $cf->{'bfd'};
     my $chunk = $cf->{'chunknames'}->{$alf_directory};
     if (!defined $chunk)
     {
@@ -1251,7 +1807,7 @@ sub alf_directory
 sub alf_timestamp
 {
     my ($cf) = @_;
-    my $cfd = $cf->{'cfd'};
+    my $cfd = $cf->{'bfd'};
     my $chunk = $cf->{'chunknames'}->{$alf_directory};
     if (!defined $chunk)
     {
@@ -1268,7 +1824,7 @@ sub alf_timestamp
 sub alf_version
 {
     my ($cf) = @_;
-    my $cfd = $cf->{'cfd'};
+    my $cfd = $cf->{'bfd'};
     my $chunk = $cf->{'chunknames'}->{$alf_version};
     if (!defined $chunk)
     {
@@ -1310,6 +1866,106 @@ sub alf_check
 
     return undef;
 }
+
+
+#######################################################################
+
+# ELF-specific settings
+
+sub elffile
+{
+    my ($filename) = @_;
+    my $ef = binaryfile($filename);
+    my $efd = $ef->{'bfd'};
+
+    my $magic = readfixedstring($efd, 4);
+    if ($magic ne "\x7fELF")
+    {
+        die "Bad magic string '$magic'";
+    }
+    my $class = readbyte($efd);
+    if ($class != 1)
+    {
+        die "Bad class (should be 32 bit (1), not $class)";
+    }
+    my $endianness = readbyte($efd);
+    if ($endianness != 1 && $endianness != 2)
+    {
+        die "Bad endianness (should be 1 or 2, not $endianness)";
+    }
+    my $elfversion = readbyte($efd);
+    if ($elfversion != 1)
+    {
+        die "Bad ident version (should be 1, not $elfversion)";
+    }
+
+    $ef->{'OSABI'} = readbyte($efd);
+    $ef->{'ABIVersion'} = readbyte($efd);
+    $ef->{'Padding'} = readfixedstring($efd, 7);
+
+    # From here on, the endianness matters
+    if ($endianness == 1)
+    {
+        binary_littleend($ef);
+    }
+    else
+    {
+        binary_bigend($ef);
+    }
+
+    $ef->{'Type'} = readshort($efd);
+    $ef->{'Machine'} = readshort($efd);
+    $ef->{'Version'} = readword($efd);
+
+    if ($ef->{'Version'} != 1)
+    {
+        die "Bad ELF version (should be 1, not $ef->{'Version'})";
+    }
+    $ef->{'Entry'} = readword($efd);
+    $ef->{'PHOff'} = readword($efd);
+    $ef->{'SHOff'} = readword($efd);
+    $ef->{'Flags'} = readword($efd);
+    $ef->{'EHSize'} = readshort($efd);
+    $ef->{'PHEntSize'} = readshort($efd);
+    $ef->{'PHNum'} = readshort($efd);
+    $ef->{'SHEntSize'} = readshort($efd);
+    $ef->{'SHNum'} = readshort($efd);
+    $ef->{'SHStrNdx'} = readshort($efd);
+
+    return $ef;
+}
+
+
+# Checking function
+
+sub elf_check
+{
+    my ($filename, $args) = @_;
+    my $ef = elffile($filename);
+
+    if ($args->{'endianness'})
+    {
+        if ($ef->{'endian'} ne lc($args->{'endianness'}))
+        {
+            return "Expected endianness $args->{'endianness'}, but got $ef->{'endian'}";
+        }
+    }
+
+    for $key ('Type', 'Entry', 'OSABI', 'PHOff', 'SHOff', 'EHSize', 'Flags',
+              'PHEntSize', 'PHNum',
+              'SHEntSize', 'SHNum', 'SHStrNdx')
+    {
+        my $argkey = lc($key);
+        if (defined($args->{$argkey}) &&
+            $ef->{$key} ne $args->{$argkey})
+        {
+            return "Expected $argkey $args->{$argkey}, but got $ef->{$key}";
+        }
+    }
+
+    return undef;
+}
+
 
 #######################################################################
 
@@ -1514,6 +2170,32 @@ sub binary_check
 # Execute in the directory requested
 # NOTE: On RISC OS, this is destructive, as there is only one CWD.
 chdir "$dir";
+my $filtereddir = $dir;
+while ($filtereddir =~ s!\.\./[^./][^./][^/]+!!)
+{} # Remove any ../<dir> components
+my @dirparts = split m!/!, $filtereddir;
+if (scalar(@dirparts) == 1 && $dir =~ /\./)
+{
+    # They gave a RISC OS path (FIXME: Decide how to convert the path above to native form)
+    @dirparts = split m!\.!, $filtereddir;
+}
+# Strip the specifications of the current directory.
+@dirparts = grep { $_ ne '@' && $_ ne '.' } @dirparts;
+
+
+# Now build the relative location of the original directory
+my $rootdir;
+if ($^O eq 'riscos')
+{
+    $rootdir = '^.' x scalar(@dirparts);
+    $rootdir = '@.' if ($rootdir eq '');
+}
+else
+{
+    $rootdir = '../' x scalar(@dirparts);
+    $rootdir = './' if ($rootdir eq '');
+}
+
 
 # Ensure we output immediately, so that stderr appears in a sane place
 $| = 1;
@@ -1524,7 +2206,7 @@ my $pass = 0;
 my $fail = 0;
 my $crash = 0;
 my $skip = 0;
-for my $group (@groups)
+for $group (@groups)
 {
     if ($group->{'skip'})
     {
@@ -1536,7 +2218,7 @@ for my $group (@groups)
     }
     print "$group->{'group'}:\n";
     $group->{'skip'} = 0;
-    for my $test (@{ $group->{'tests'} })
+    for $test (@{ $group->{'tests'} })
     {
         if ($test->{'skip'})
         {
@@ -1591,6 +2273,16 @@ if ($total != 0)
 
 if ($junitxml)
 {
+    # Turn the junitxml into a native path
+    $junitxml = native_filename($junitxml);
+    if ($junitxml =~ m!^/! || $junitxml =~ m![\$@%]!)
+    {
+        # Already anchored.
+    }
+    else
+    {
+        $junitxml = $rootdir . $junitxml;
+    }
     write_junitxml($junitxml, @groups);
 }
 
