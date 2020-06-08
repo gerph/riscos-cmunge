@@ -53,6 +53,8 @@ build-macos:
 build-command-riscos:
   <<: *common
   stage: build-riscos
+  variables:
+    BUILD32: 1
   script:
     - ci/build.sh install
 
