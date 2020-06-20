@@ -247,6 +247,9 @@ const char *file_getfilename(FILE *f)
 char *file_temp(void)
 {
   filelist *ptr;
+  char *temporary_filename = tmpnam(NULL);
+  if (temporary_filename == NULL)
+    return NULL;
 
   ptr=malloc(sizeof(filelist));
   if (ptr==NULL)
@@ -254,10 +257,10 @@ char *file_temp(void)
 #ifdef WIN32
 /* Windows appears to be generating us a non-fully specified temporary filename.
    I'm seeing names like "\s250.1" which makes not so much sense. */
-  ptr->filename=strdup_strip(tmpnam(NULL));
+  ptr->filename=strdup_strip(temporary_filename);
 #else
 #ifdef __riscos
-  ptr->filename=strdup_strip(tmpnam(NULL));
+  ptr->filename=strdup_strip(temporary_filename);
 #else
   {
     char tempname[PATH_MAX];
