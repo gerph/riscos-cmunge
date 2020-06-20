@@ -86,6 +86,15 @@ int our_system(const char *cmdtxt)
    */
   rc = _kernel_system(cmd, 0);
   dprintf("  got return code %i\n", rc);
+  if (rc == 0)
+  {
+    char *env = getenv("Sys$ReturnCode");
+    if (!env)
+    {
+        rc = atoi(env);
+        dprintf("  extracted return code %i\n", rc);
+    }
+  }
   free(cmd);
 #else
   int need_quotes =0;
