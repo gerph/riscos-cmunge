@@ -221,17 +221,24 @@
 #           * The 'for' statements do not include the 'my' which is expected on later
 #             perl version, as it is implicit in the earlier versions.
 #           * mkdir must always be called with an octal mode.
-BEGIN {
-    eval "use warnings;";
-    eval "use strict;";
-}
+if ($^O ne '' && $^O ne 'riscos')
+{
+    BEGIN {
+        eval "use warnings;";
+        eval "use strict;";
+    }
 
-BEGIN {
-    eval "use Time::HiRes qw(time);";
+    BEGIN {
+        eval "use Time::HiRes qw(time);";
+    }
 }
 
 my $testtool = undef;
 my $dir = undef;
+my $riscos = ($^O eq '' || $^O eq 'riscos');
+
+# IF they want help.
+my $help = 0;
 
 # Whether we're debugging
 my $debug_filename = 0;
@@ -251,13 +258,33 @@ my $outputdump = 0;
 my $outputsavedir = undef;
 
 # Name of the test script to execute
-my $testscript = "tests.txt";
+my $testscript = $riscos ? "tests/txt" : "tests.txt";
 
 # Colour configuration
 my $reset_colour = "\e[0m";
 my $fail_colour = "\e[31m";
 my $crash_colour = "\e[35m";
 my $ok_colour = "\e[32m";
+
+if ($riscos)
+{
+    # We can't use the ANSI escapes on RISC OS.
+    if (0)
+    {
+        # This doesn't work properly; it gets written as escape characters.
+        $reset_colour = "\x11\x07";
+        $fail_colour = "\x11\x01"; # Hopefully red
+        $crash_colour = "\x11\x05"; # Hopefully purple
+        $ok_colour = "\x11\x04"; # Hopefully green
+    }
+    else
+    {
+        $reset_colour = "";
+        $fail_colour = "";
+        $crash_colour = "";
+        $ok_colour = "";
+    }
+}
 
 # Generate Junit XML at the end? (the filename)
 my $junitxml = undef;
@@ -268,7 +295,11 @@ while ($arg = shift)
     if ($arg =~ /^--?(.*)$/)
     {
         my $switch = $1;
-        if ($switch eq 'v' || $switch eq 'verbose')
+        if ($switch eq 'h' || $switch eq 'help')
+        {
+            $help = 1;
+        }
+        elsif ($switch eq 'v' || $switch eq 'verbose')
         {
             $verbose = 1;
         }
@@ -333,7 +364,8 @@ while ($arg = shift)
 }
 
 if (!defined $testtool ||
-    !defined $dir)
+    !defined $dir ||
+    $help)
 {
     print "Syntax: $0 [<options>] <test tool> <dir>\n";
     print "Options:\n";
@@ -346,7 +378,7 @@ if (!defined $testtool ||
     print "    -show-output     Show output on failure\n";
     print "    -save-output <dir>   Save all output to a directory\n";
     print "    -debug <type>    Enable debug types as comma-separated list\n";
-    exit 1;
+    exit($help ? 0 : 1);
 }
 
 my $extensions_dir_re = "s|hdr|c|h|cmhg|s_c|o|aof|bin|x";
@@ -393,7 +425,7 @@ else
     $dirsep = '/';
 }
 my $tempbase;
-if ($^O eq 'riscos')
+if ($riscos)
 {
     $tempbase = "<Wimp\$ScrapDir>.tt-$$";
 }
@@ -402,6 +434,7 @@ else
     $tempbase = "/tmp/tt-$$";
 }
 my %tempnames = ();
+
 
 END {
     for $name (keys %tempnames)
@@ -433,35 +466,42 @@ sub parse_test_script
     my $group = undef;
     my $test = undef;
     my $acc = undef;
-
+    my @lines;
     my @groups;
-    open(my $testfh, "< $testscript") || die "Cannot open test script '$testscript': $!";
-    while (<$testfh>)
+    open(TESTFH, "< $testscript") || die "Cannot open test script '$testscript': $!";
+    while (<TESTFH>)
     {
         chomp;
         next if (/^ *#/ || /^ *$/);
 
+        push @lines, $_;
+    }
+    close(TESTFH);
+
+    my $line;
+    for $line (@lines)
+    {
         my $checker;
         my $minus;
-        my ($cmd, $arg) = (/^([A-Za-z]+): +(.*?) *$/);
+        my ($cmd, $arg) = ($line =~ /^([A-Za-z]+): +(.*?) *$/);
         if (!$cmd)
         {
-            ($minus, $cmd) = (/^(-?)([A-Za-z]+):$/);
+            ($minus, $cmd) = ($line =~ /^(-?)([A-Za-z]+):$/);
         }
         if (!$cmd)
         {
             # Not a base command specification; so try a checker value.
-            ($checker, $cmd, $arg) = (/^([A-Za-z]+):([A-Za-z]+): *(.*?) *$/);
+            ($checker, $cmd, $arg) = ($line =~ /^([A-Za-z]+):([A-Za-z]+): *(.*?) *$/);
             $checker = lc $checker;
             if (!defined $checkers{$checker})
             {
-                die "Unrecognised checker '$checker' in '$_'";
+                die "Unrecognised checker '$checker' in line '$line' whilst reading '$testscript'";
             }
         }
 
         if (!$cmd)
         {
-            die "Cannot understand line '$_'";
+            die "Cannot understand line '$line' whilst reading '$testscript'";
         }
 
         if (defined $checker)
@@ -488,7 +528,7 @@ sub parse_test_script
                     'crash' => 0,
                     'skip' => 0,
                 };
-            delete $acc->{'tests'};
+            delete $acc->{'tests'} if (defined $acc);
             $test = undef;
             $acc = $group;
             push @groups, $group;
@@ -562,7 +602,7 @@ sub parse_test_script
         }
         else
         {
-            die "Unknown command '$cmd' in '$_'";
+            die "Unknown command '$cmd' in '$line'";
         }
     }
 
@@ -647,7 +687,7 @@ sub escape_parameters
             {
                 # This is a quoted string, so we need to escape anything that would
                 # cause the shell problems.
-                if ($^O eq 'riscos')
+                if ($riscos)
                 {
                     # Nothing to do.
                 }
@@ -660,7 +700,7 @@ sub escape_parameters
             {
                 # This is a bare string or one that isn't quoted as expected,
                 # so we need to escape anything that would cause it problems.
-                if ($^O eq 'riscos')
+                if ($riscos)
                 {
                     # Nothing to do.
                 }
@@ -823,10 +863,10 @@ sub read_file
     my $expected = '';
     if (-f "$expect")
     {
-        open(my $fh, "< $expect") || die "Cannot read $label '$expect': $!";
-        while (<$fh>)
+        open(FH, "< $expect") || die "Cannot read $label '$expect': $!";
+        while (<FH>)
         { $expected .= $_; }
-        close($fh);
+        close(FH);
     }
     return $expected;
 }
@@ -840,10 +880,11 @@ sub read_file
 sub read_command_file
 {
     my ($filename) = @_;
-    open(my $fh, "< $filename") || die "Cannot read file '$filename': $!";
+    local *FH;
+    open(FH, "< $filename") || die "Cannot read file '$filename': $!";
 
     my @lines;
-    while (<$fh>)
+    while (<FH>)
     {
         chomp;
         next if (/^\s*$/ || /^#/);
@@ -865,7 +906,7 @@ sub read_command_file
         }
         push @lines, $_;
     }
-    close($fh);
+    close(FH);
     return @lines;
 }
 
@@ -919,7 +960,7 @@ sub apply_replacements
 
         # Replacement action
         my $action = 'die "undefined action!\n";';
-        if ($line =~ m!^s([^a-zA-Z0-9])(.*[^\\]|)\1(.*[^\\]|)\1([mgs]?)$!)
+        if ($line =~ m!^s([^a-zA-Z0-9])(.*[^\\]|)\1(.*[^\\]|)\1([mgs]?i?)$!)
         {
             my $sym = $1;
             my $from = $2;
@@ -971,12 +1012,13 @@ sub apply_replacements
     }
 
     # Wrap the replacement code with the line iteratation
+    local $text = $output;
     my $code = "my \$index = 0;\n";
-    $code .= "my (\$trailingblanks) = (\$output =~ /(\\n+)\$/);\n";
+    $code .= "my (\$trailingblanks) = (\$text =~ /(\\n+)\$/);\n";
     $code .= "my \@extralines;\n";
     $code .= "if (length(\$trailingblanks || '') > 0)\n";
     $code .= "{ \@extralines = (('') x (length(\$trailingblanks || '') - 1)); }\n";
-    $code .= "for \$line ((split /\\n/, \$output), \@extralines)\n{\n";
+    $code .= "for \$line ((split /\\n/, \$text), \@extralines)\n{\n";
     $code .= "  \$index++;\n";
     #$code .= "  print \"LINE \$index: \$line\\n\";\n";
     $code .= join("\n", @replacement_code);
@@ -990,8 +1032,10 @@ sub apply_replacements
     print "SCRIPT:\n$code\n" if ($debug_replace);
 
     # Run the replacements
+    #print "INPUT:\n$output\n" if ($debug_replace);
     my $content = '';
     eval $code || die "Evaluation of replacements failed: $@";
+    #print "RESULT:\n$content\n" if ($debug_replace);
 
     return $content;
 }
@@ -1044,8 +1088,8 @@ sub run_test
     {
         $removes = native_filename($removes);
         # We create the file to check that it's not there at the end.
-        open(my $fh, '>', $removes) || die "Cannot create '$removes' for 'removes' check: $!";
-        close($fh);
+        open(FH, "> $removes") || die "Cannot create '$removes' for 'removes' check: $!";
+        close(FH);
     }
 
     printf '  %-34s : ', $name;
@@ -1073,25 +1117,35 @@ sub run_test
     $cmdtorun = escape_parameters($cmdtorun, 1);
 
     # FIXME: Probably not correct for RISC OS?
-    if ($capture eq 'stdout')
+    if ($riscos)
     {
-        $cmdtorun .= ' 2> /dev/null';
-    }
-    elsif ($capture eq 'stderr')
-    {
-        $cmdtorun .= ' 2>&1 > /dev/null';
-    }
-    elsif ($capture eq 'both')
-    {
-        $cmdtorun .= ' 2>&1';
+        if ($capture ne 'both')
+        {
+            die "Bad 'capture' specification: must be 'both' on RISC OS, not '$capture'\n";
+        }
     }
     else
     {
-        die "Bad 'capture' specification: must be 'stdout', 'stderr' or 'both', not '$capture'\n";
-    }
-    if ($cmdtorun !~ / 2>/)
-    {
-        $cmdtorun .= ' 2>&1';
+        if ($capture eq 'stdout')
+        {
+            $cmdtorun .= ' 2> /dev/null';
+        }
+        elsif ($capture eq 'stderr')
+        {
+            $cmdtorun .= ' 2>&1 > /dev/null';
+        }
+        elsif ($capture eq 'both')
+        {
+            $cmdtorun .= ' 2>&1';
+        }
+        else
+        {
+            die "Bad 'capture' specification: must be 'stdout', 'stderr' or 'both', not '$capture'\n";
+        }
+        if ($cmdtorun !~ / 2>/)
+        {
+            $cmdtorun .= ' 2>&1';
+        }
     }
     if (defined $input)
     {
@@ -1102,9 +1156,9 @@ sub run_test
         $input = tempfilename('input');
         my $inputactual = $inputline;
         $inputactual =~ s/\\n/\n/g;
-        open(my $infh, "> $input") || die "Cannot create temporary input file '$input': $!";
-        print $infh "$inputactual\n";
-        close($infh);
+        open(INFH, "> $input") || die "Cannot create temporary input file '$input': $!";
+        print INFH "$inputactual\n";
+        close(INFH);
     }
     if (defined $input)
     {
@@ -1119,19 +1173,32 @@ sub run_test
         my $start_time = time();
 
         # Set up the environment that we run the command under.
-        my %oldenv = %ENV;
+        my %oldenv = ();
         if (defined $test->{'env'})
         {
             for $key (keys %{$test->{'env'}})
             {
+                $oldenv{$key} = $ENV{$key};
                 $ENV{$key} = $test->{'env'}->{$key};
             }
         }
         #print "RUN: '$cmdtorun'\n";
         $output = `$cmdtorun`;
         $status = $?;
+        #print "Status: $status\n";
         $test->{'duration'} = time() - $start_time;
-        %ENV = %oldenv;
+
+        for $key (keys %{$test->{'env'}})
+        {
+            if (defined $oldenv{$key})
+            {
+                $ENV{$key} = $oldenv{$key};
+            }
+            else
+            {
+                delete $ENV{$key};
+            }
+        }
     }
     my $sig = ($status & 255);
     my $rc = $sig ? 128+$sig : ($status >> 8);
@@ -1161,9 +1228,9 @@ sub run_test
         if ($output ne $expected)
         {
             $fail = "Expected output did not match";
-            open(my $fh, "> $native_expect-actual") || die "Could not write expected output to '$native_expect-actual': $!";
-            print $fh $output;
-            close($fh);
+            open(FH, "> $native_expect-actual") || die "Could not write expected output to '$native_expect-actual': $!";
+            print FH $output;
+            close(FH);
         }
         else
         {
@@ -1301,9 +1368,9 @@ sub run_test
         $name =~ s/\//_/g;
         my $path = sprintf "%s/%03d_%s.log", $dir, $test->{'test-index'}, $leaf;
 
-        open(my $fh, "> $path") || die "Cannot open output save file '$path': $!";
-        print $fh $output;
-        close($fh);
+        open(FH, "> $path") || die "Cannot open output save file '$path': $!";
+        print FH $output;
+        close(FH);
     }
 
     return 2 if ($sig);
@@ -1354,11 +1421,11 @@ sub write_junitxml
     }
 
     print "Writing JUnitXML file to '$output'\n";
-    open(my $fh, "> $output") || die "Cannot write JunitXML '$output': $!";
+    open(FH, "> $output") || die "Cannot write JunitXML '$output': $!";
 
-    print $fh "<?xml version=\"1.0\"?>\n";
+    print FH "<?xml version=\"1.0\"?>\n";
     # FIXME: Should skipped be mapped to 'disabled' at the top level?
-    print $fh "<testsuites tests=\"$ntests\" failures=\"$nfailures\" errors=\"$nerrors\">\n";
+    print FH "<testsuites tests=\"$ntests\" failures=\"$nfailures\" errors=\"$nerrors\">\n";
     for $group (@groups)
     {
         $nerrors = $group->{'crash'};
@@ -1374,50 +1441,50 @@ sub write_junitxml
                 $duration += $test->{'duration'};
             }
         }
-        print $fh "  <testsuite name=\"" . xml_escape($group->{'group'}) . "\" tests=\"$ntests\" failures=\"$nfailures\" errors=\"$nerrors\" skipped=\"$nskipped\"";
+        print FH "  <testsuite name=\"" . xml_escape($group->{'group'}) . "\" tests=\"$ntests\" failures=\"$nfailures\" errors=\"$nerrors\" skipped=\"$nskipped\"";
         if ($duration)
         {
-            print $fh sprintf " time=\"%.2f\"", $duration;
+            print FH sprintf " time=\"%.2f\"", $duration;
         }
-        print $fh ">\n";
+        print FH ">\n";
         for $test (@{ $group->{'tests'} })
         {
             next if (!defined $test->{'result'});
-            print $fh "    <testcase classname=\"ToolTest\" name=\"" . xml_escape($test->{'name'}) . "\"";
+            print FH "    <testcase classname=\"ToolTest\" name=\"" . xml_escape($test->{'name'}) . "\"";
             if (defined $test->{'duration'})
             {
-                print $fh sprintf " time=\"%.2f\"", $test->{'duration'};
+                print FH sprintf " time=\"%.2f\"", $test->{'duration'};
             }
             if ($test->{'result'} eq 'pass')
             {
-                print $fh " />\n";
+                print FH " />\n";
             }
             else
             {
                 my $message = "$test->{'result'}: $test->{'result_message'}";
-                print $fh ">\n";
+                print FH ">\n";
                 my $tag = $result_tag_name{ $test->{'result'} };
-                print $fh "      <$tag";
+                print FH "      <$tag";
                 if ($has_message{ $test->{'result'} })
                 {
-                    print $fh " message=\"$message\"";
+                    print FH " message=\"$message\"";
                 }
-                print $fh ">";
+                print FH ">";
                 my $output = $test->{'result_output'};
                 if ($output)
                 {
                     # Escape any ]]> that might confuse the CDATA
                     $output =~ s/]]>/]]]]><!\[CDATA\[>/g;
-                    print $fh "<![CDATA[${output}]]>\n";
+                    print FH "<![CDATA[${output}]]>\n";
                 }
-                print $fh "      </$tag>\n";
-                print $fh "    </testcase>\n";
+                print FH "      </$tag>\n";
+                print FH "    </testcase>\n";
             }
         }
-        print $fh "  </testsuite>\n";
+        print FH "  </testsuite>\n";
     }
-    print $fh "</testsuites>\n";
-    close($fh);
+    print FH "</testsuites>\n";
+    close(FH);
 }
 
 
@@ -1434,9 +1501,10 @@ sub binaryfile
             'filesize' => -s $filename,
             'endian' => 'unknown',
         };
-    open(my $bfh, "< $filename") || die "Cannot read chunk file '$filename'\n";
+    local *BFH;
+    open(BFH, "< $filename") || die "Cannot read chunk file '$filename'\n";
     my $bfd = {
-            'fh' => $bfh,
+            'fh' => \*BFH,
             'reverse' => 0,
         };
 
@@ -1990,10 +2058,10 @@ sub text_check
         my $native_expect = native_filename($args->{'matches'});
         if ($txt ne $expected)
         {
-            open(my $fh, "> $native_expect-actual")
+            open(FH, "> $native_expect-actual")
                 || die "Cannot write actual output content '$native_expect-actual': $!";
-            print $fh $txt;
-            close($fh);
+            print FH $txt;
+            close(FH);
             return "Does not match expected text file (see $native_expect-actual)";
         }
         else
@@ -2079,9 +2147,9 @@ sub binary_check
     if ($args->{'checkfile'})
     {
         my $native_expect = native_filename($args->{'checkfile'});
-        open(my $fh, "< $native_expect") || die "Cannot read binary check file '$native_expect': $!\n";
+        open(FH, "< $native_expect") || die "Cannot read binary check file '$native_expect': $!\n";
         my @fail;
-        while (<$fh>)
+        while (<FH>)
         {
             chomp;
             if (/^ *#/)
@@ -2147,10 +2215,10 @@ sub binary_check
         my $native_expect = native_filename($args->{'matches'});
         if ($bin->{'data'} ne $expected)
         {
-            open(my $fh, "> $native_expect-actual")
+            open(FH, "> $native_expect-actual")
                 || die "Cannot write actual output content '$native_expect-actual': $!";
-            print $fh $bin->{'data'};
-            close($fh);
+            print FH $bin->{'data'};
+            close(FH);
             return "Does not match expected binary file (see $native_expect-actual)";
         }
         else
@@ -2254,13 +2322,13 @@ for $group (@groups)
 
 print "\n";
 print "-----------\n";
-printf "Pass:  %6i\n", $pass;
-printf "Fail:  %6i\n", $fail;
-printf "Crash: %6i\n", $crash;
-printf "Skip:  %6i\n", $skip;
+printf "Pass:  %6d\n", $pass;
+printf "Fail:  %6d\n", $fail;
+printf "Crash: %6d\n", $crash;
+printf "Skip:  %6d\n", $skip;
 print "-----------\n";
 my $total = $pass + $fail + $crash;
-printf "Total run:   %6i\n", $total;
+printf "Total run:   %6d\n", $total;
 if ($total != 0)
 {
     printf "Pass ratio:  %6.2f %%\n", 100 * $pass / $total;
