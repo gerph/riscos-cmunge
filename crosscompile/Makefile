@@ -65,6 +65,9 @@ tool_dir:
 
 test: $(COMPONENT)
 	mkdir -p ../testdata/o
+	mkdir -p ../testdata/h
+	mkdir -p ../testdata/hdr
+	mkdir -p ../testdata/s
 	mkdir -p ../artifacts
 	perl ../testdata/test.pl --junitxml "${JUNITXML}" --show-command --show-output $(shell pwd)/$(COMPONENT) ../testdata
 

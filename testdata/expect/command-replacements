@@ -1,0 +1,7 @@
+# Ourself
+s/^CMunge \d\.\d\d.*?$/CMunge <VERSION>/m
+s/^(Copyright .c. )\d\d\d\d-\d\d\d\d/$1YYYY-YYYY/m
+
+# Now the tools
+s/^(Norcroft RISC OS .*vsn) \d\.\d\d.*?$/$1 <VERSION>/m
+s/^(ARM AOF Macro Assembler) \d\.\d\d.*?$/$1 <VERSION>/m

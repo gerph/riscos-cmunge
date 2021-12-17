@@ -33,3 +33,12 @@ Command: $TOOL -help
 Test: Help message (short)
 Command: $TOOL -h
 
+
+Group: Examples
+Replace: expect/command-replacements
+
+Test: Big test of many of the features
+Command: $TOOL -throwback cmhg.bigtest -s s/bigtest -o o.bigtest -p -d h/bigtest -DRobin=Genius -DNoBugsPlease -UJustin -I@.inc. -zbase -xhdr hdr/bigtest -xh h/bigtest_swis
+Creates: h/bigtest h/bigtest_swis hdr/bigtest o/bigtest s/bigtest
+Expect: expect/examples/$ARG1
+Args: bigtest
