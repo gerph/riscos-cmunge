@@ -137,7 +137,8 @@ typedef struct {
   handler_list  irqs;		/* irq-handlers */
   handler_list  events;		/* event-handler */
   char         *init;		/* initialisation-code */
-  char         *lib_init;	/* library-enter-code */
+  char         *lib_init;   /* library-initialisation-code */
+  char         *lib_enter;  /* library-enter-code */
   char         *final;		/* finalisation-code */
   handler_list  generics;	/* generic-veneers */
   handler_list	vectors;	/* vector-handlers */

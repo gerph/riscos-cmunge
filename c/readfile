@@ -1308,7 +1308,7 @@ field_t fields[] =
       "to use a particular routine to handle a SWI.\n"
     }, IN_BOTH },
 
-  { "library-enter-code",          { NULL, ft_label,    &opt.lib_init },
+  { "library-initialisation-code", { NULL, ft_label,    &opt.lib_init },
     { "_clib_initialisemodule",
       "The library initialisation code sets up the C environment for use "
       "with this module. You may wish to perform some initialisation prior "
@@ -1317,7 +1317,16 @@ field_t fields[] =
       "functionality.\n"
       "You will probably never need this field."
     }, IN_BOTH },
-  { "library-initialisation-code", { NULL, ft_alias, (void*)"library-enter-code"} },
+
+  { "library-enter-code",          { NULL, ft_label,    &opt.lib_enter },
+    { "_clib_entermodule",
+      "The library entry code sets up the C environment for use with this "
+      "module when the module is entered. You may wish to perform some "
+      "initialisation prior to the user mode C environment being created. "
+      "You must call _clib_entermodule prior to returning, or provide an "
+      "identical functionality.\n"
+      "You will probably never need this field."
+    }, IN_BOTH },
 
   { "date-string",                 { NULL, ft_string,   &opt.datestring },
     { "21 Dec 1999",

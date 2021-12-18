@@ -600,7 +600,9 @@ static void start(void) {
       case run_clib:
         {
           char *routine;
-          if (opt.runnable == run_blib)
+          if (opt.lib_enter)
+            routine = opt.lib_enter;
+          else if (opt.runnable == run_blib)
             routine="_blib_entermodule";
           else
             routine="_clib_entermodule";

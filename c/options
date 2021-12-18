@@ -38,6 +38,7 @@ void Options_Init(void) {
   opt.events      = NULL;
   opt.init        = NULL;
   opt.final       = NULL;
+  opt.lib_enter   = NULL;
   opt.lib_init    = NULL;
   opt.generics    = NULL;
   opt.vectors     = NULL;
