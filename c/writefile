@@ -556,21 +556,24 @@ static void service(void) {
   fprintf(file, "\tMOV\tr10,r13,LSR #20\n");
   fprintf(file, "\tMOV\tr10,r10,LSL #20\n");
   fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
+  // If we haven't set up the r12 value yet, we are not in an initialised state and trying
+  // to set up stacks or call the module will have dire consequences.
   fprintf(file, "\tMOV\tr2,r12\n");
   fprintf(file, "\tLDR\tr12,[r12,#0]\n");
+  fprintf(file, "\tTEQ\tr12, #0\n");
   if (CODE26)
   {
-    fprintf(file, "\tLDMIB\tr12,{r8,r9}\n");
-    fprintf(file, "\tSTMIA\tr10,{r8,r9}\n");
+    fprintf(file, "\tLDMNEIB\tr12,{r8,r9}\n");
+    fprintf(file, "\tSTMNEIA\tr10,{r8,r9}\n");
   }
   else
   {
-    fprintf(file, "\tLDMIB\tr12,{r12,r14}\n");
-    fprintf(file, "\tSTMIA\tr10,{r12,r14}\n");
+    fprintf(file, "\tLDMNEIB\tr12,{r12,r14}\n");
+    fprintf(file, "\tSTMNEIA\tr10,{r12,r14}\n");
   }
   fprintf(file, ADD_Lib_Reloc);
   fprintf(file, "\tIMPORT\t%s\n", opt.service);
-  fprintf(file, "\tBL\t%s\n", opt.service);
+  fprintf(file, "\tBLNE\t%s\n", opt.service);
   fprintf(file, "\tMOV\tr14,r7\n");
   if (CODE26)
   {
