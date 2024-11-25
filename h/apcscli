@@ -23,6 +23,8 @@
 #define APCS_FPREGARGS     (1<<4) /* Floating point registers */
 #define APCS_FP            (1<<5) /* Frame pointer */
 
+#define APCS_64BIT         (1<<30) /* Flag at the end, for just 64bit code */
+
 /* Structure representing the APCS options which can be used in opt.apcs */
 typedef struct apcsoptions_s {
   char *name;        /* Argument name */

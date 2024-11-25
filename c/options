@@ -117,7 +117,8 @@ static void help_text(void) {
 "\t-tnorcroft    \bUse Norcroft tool chain to generate output (default).\n"
 "\t-32bit        \bGenerate 32-bit compatible code.\n"
 "\t-26bit        \bGenerate 26-bit only code (default).\n"
-"\t-apcs 3/<flags>\bSpecify APCS variant to use.\n",
+"\t-64bit        \bGenerate 64-bit AArch64 code for GCC AS.\n"
+"\t-apcs [3/]<flags>\bSpecify APCS variant to use.\n",
 "");
 
   /* Display the APCS variant in use */
@@ -298,9 +299,13 @@ void Options_CL(int argc, char *argv[]) {
         ErrorFatal("Unknown tweak option -z '%s'", arg);
       }
     } else if (strcmp("-32bit", argv[i])==0) { /* case sensitive */
+      opt.apcs&=~APCS_32BIT|APCS_64BIT;
       opt.apcs|= APCS_32BIT;
     } else if (strcmp("-26bit", argv[i])==0) { /* case sensitive */
-      opt.apcs&=~APCS_32BIT;
+      opt.apcs&=~APCS_32BIT|APCS_64BIT;
+    } else if (strcmp("-64bit", argv[i])==0) { /* case sensitive */
+      opt.apcs&=~APCS_32BIT|APCS_64BIT;
+      opt.apcs|= APCS_64BIT;
     } else if (strcmp("-apcs", argv[i])==0) { /* case sensitive */
       i++;
       if (i < argc) {

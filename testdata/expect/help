@@ -38,11 +38,13 @@ Options:
   -tnorcroft         Use Norcroft tool chain to generate output (default).
   -32bit             Generate 32-bit compatible code.
   -26bit             Generate 26-bit only code (default).
-  -apcs 3/<flags>    Specify APCS variant to use.
+  -64bit             Generate 64-bit AArch64 code for GCC AS.
+  -apcs [3/]<flags>  Specify APCS variant to use.
 
 APCS flags: (*=currently selected)
   /32[bit]           32 bit APCS variant
   /26[bit]          *26 bit APCS variant
+  /64[bit]           64 bit (AArch 64)
   /reent[rant]       Reentrant APCS variant
   /nonreent[rant]   *Non reentrant APCS variant
   /fpe3              Floating point emulator 3 compatibility

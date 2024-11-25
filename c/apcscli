@@ -11,10 +11,13 @@
 
 /* This is a global variable so that we can use it in the other files */
 apcsoptions_t apcsoptions[] = {
-  { "32bit",          2, APCS_32BIT,        APCS_32BIT,
+  { "32bit",          2, APCS_32BIT | APCS_64BIT,   APCS_32BIT,
     "32 bit APCS variant" },
-  { "26bit",          2, APCS_32BIT,        0,
+  { "26bit",          2, APCS_32BIT | APCS_64BIT,   0,
     "26 bit APCS variant" },
+
+  { "64bit",          2, APCS_32BIT | APCS_64BIT,   APCS_64BIT,
+    "64 bit (AArch 64)" },
 
   { "reentrant",      5, APCS_REENTRANT,    APCS_REENTRANT,
     "Reentrant APCS variant" },
@@ -156,7 +159,10 @@ int apcscli_buildstring(unsigned long flags, unsigned long ignoreflags,
                              buffer += len; \
                              bufferlen -= len; \
                              totallen += len;
-  ADDTOBUFFER("3", 1);
+  if (!(flags & APCS_64BIT))
+  {
+      ADDTOBUFFER("3", 1);
+  }
 
   while (arg->name != NULL)
   {
@@ -170,7 +176,10 @@ int apcscli_buildstring(unsigned long flags, unsigned long ignoreflags,
 
       if ((flags & arg->bic)==arg->orr)
       {
-        ADDTOBUFFER("/", 1);
+        if (totallen != 0)
+        {
+            ADDTOBUFFER("/", 1);
+        }
         ADDTOBUFFER(arg->name, clen);
       }
     }

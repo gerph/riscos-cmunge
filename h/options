@@ -98,8 +98,9 @@ typedef struct defines_list_s {
 } defines_list_s;
 
 /* Shortcut checks so that it's easier to see what's happening */
+#define CODE64   (opt.apcs & APCS_64BIT)
 #define CODE32   (opt.apcs & APCS_32BIT)
-#define CODE26   (!CODE32)
+#define CODE26   ((opt.apcs & (APCS_32BIT | APCS_64BIT)) == 0)
 
 /* Main module structure */
 
