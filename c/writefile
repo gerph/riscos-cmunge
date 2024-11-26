@@ -93,13 +93,16 @@
 
 #define DCD_OFFSET(label, comment) \
   do { \
+    char *_label = STRINGIFY(label); \
+    int _len = strlen(_label); \
+    char *_tabs = _len < 8 ? "\t\t" : (_len < 16 ? "\t" : ""); \
     if (! CODE64) \
     { \
-      fprintf(file, "\tDCD\t%s\t\t-_CMUNGE_origin\t; %s\n", STRINGIFY(label), STRINGIFY(comment)); \
+      fprintf(file, "\tDCD\t%s\t%s-_CMUNGE_origin\t; %s\n", _label, _tabs, STRINGIFY(comment)); \
     } \
     else \
     { \
-      fprintf(file, ".word\t%s\t\t-_CMUNGE_origin\t; %s\n", STRINGIFY(label), STRINGIFY(comment)); \
+      fprintf(file, ".word\t%s\t%s-_CMUNGE_origin\t; %s\n", _label, _tabs, STRINGIFY(comment)); \
     } \
   } while (0)
 
@@ -117,13 +120,14 @@
 
 #define DCD_VALUE(value, comment) \
   do { \
+    char *_tabs = value < 1000000 ? "\t" : ""; \
     if (! CODE64) \
     { \
-      fprintf(file, "\tDCD\t0x%x\t\t\t\t; %s\n", value, STRINGIFY(comment)); \
+      fprintf(file, "\tDCD\t0x%x\t\t\t\t%s; %s\n", value, _tabs, STRINGIFY(comment)); \
     } \
     else \
     { \
-      fprintf(file, ".word\t0x%x\t\t\t\t; %s\n", value, STRINGIFY(comment)); \
+      fprintf(file, ".word\t0x%x\t\t\t\t%s; %s\n", value, _tabs, STRINGIFY(comment)); \
     } \
   } while (0)
 
