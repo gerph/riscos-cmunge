@@ -156,6 +156,15 @@
   } while (0)
 
 
+#define WORD_VAR(var) \
+  do { \
+    if (! CODE64) \
+      fprintf(file, "\tDCD\t%s\n", var); \
+    else \
+      fprintf(file, ".word\t%s\n", var); \
+  } while (0)
+
+
 
 static FILE *file;
 
@@ -600,10 +609,10 @@ static void commands(void) {
     }
     if (!opt.helpfn)
     {
-      fprintf(file, "_CMUNGE_nocom_handler\n");
+      LABEL(_CMUNGE_nocom_handler);
       fprintf(file, "\tMOV\tr0,#0\n"); /* no error (wrong!) */
     }
-    fprintf(file, "_CMUNGE_com_ret\n");
+    LABEL(_CMUNGE_com_ret);
   }
   else
   {
@@ -897,16 +906,16 @@ static void start(void) {
           fprintf(file,"\tLDMFD\tsp!,{r0-r4,pc}^\n");
         }
         fprintf(file,"\n");
-        fprintf(file,"_CMUNGE_stackptr\n");
-        fprintf(file,"\tDCD\t_CMUNGE_stack\n");
+        LABEL(_CMUNGE_stackptr);
+        WORD_VAR("_CMUNGE_stack");
         fprintf(file,"\n");
-        fprintf(file,"_CMUNGE_apprunning\n");
+        LABEL(_CMUNGE_apprunning);
         fprintf(file,"\tADR\tr0,_CMUNGE_apprunning_error\n");
         fprintf(file,"\tSWI\tOS_GenerateError\n");
-        fprintf(file,"_CMUNGE_apprunning_error\n");
-        fprintf(file,"\tDCD 0\t; FIXME: This is a bad error number to use\n");
+        LABEL(_CMUNGE_apprunning_error);
+        DCD_VALUE(0, FIXME: This is a bad error number to use);
         fprintf(file,"\t= \"%s already running\",0\n", opt.title);
-        fprintf(file,"\tALIGN\n");
+        ALIGN();
         break;
 
       default:
@@ -1168,7 +1177,7 @@ static void swi_handler(void) {
     }
     fprintf(file, "\tMOV\tr14,pc\n");
     fprintf(file, "\tADD\tr14,r14,# _CMUNGE_swi_ret - _CMUNGE_swi_pc\n");
-    fprintf(file, "_CMUNGE_swi_pc\n");
+    LABEL(_CMUNGE_swi_pc);
     fprintf(file, "\tCMP\tr0,#%i\n",numswis);
     fprintf(file, "\tADDLT\tpc,pc,r0,LSL #2\n");
     if (opt.swi_handler)
@@ -1198,10 +1207,10 @@ static void swi_handler(void) {
     }
     if (!opt.swi_handler)
     {
-      fprintf(file, "_CMUNGE_noswi_handler\n");
+      LABEL(_CMUNGE_noswi_handler);
       fprintf(file, "\tMOV\tr0,#-1\n"); /* 'SWI not known' */
     }
-    fprintf(file, "_CMUNGE_swi_ret\n");
+    LABEL(_CMUNGE_swi_ret);
   }
   else
   {
@@ -1232,14 +1241,14 @@ static void swi_handler(void) {
   else
   {
     fprintf(file, "\tBEQ      _CMUNGE_swi_30\n");
-    fprintf(file, "_CMUNGE_swi_20\n");
+    LABEL(_CMUNGE_swi_20);
     fprintf(file, "\tTEQ      pc,pc\n");
     fprintf(file, "\tLDMNEIA  r13!,{r1-r9,r14}\n");
     fprintf(file, "\tORRNES   pc,r14,#0x10000000\n");
     fprintf(file, "\tORR      r8,r8,#0x10000000\n");
     fprintf(file, "\tDCD &e12ff008 ; MSR cpsr_cxsf,r8\n");
     fprintf(file, "\tLDMIA    r13!,{r1-r9,pc}\n");
-    fprintf(file, "_CMUNGE_swi_30\n");
+    LABEL(_CMUNGE_swi_30);
   }
   fprintf(file, "\tADR\tr0,_CMUNGE_sht\n");
   fprintf(file, "\tMOV\tr1,#0\n");
@@ -1280,13 +1289,13 @@ static void swi_decoder(void) {
     fprintf(file, "\tBL\t%s\n", opt.swi_decoder->name);
     fprintf(file, "\tSTR\tr0,[r13,#0]\n");
     fprintf(file, "\tB\t_CMUNGE_sd2\n");
-    fprintf(file, "_CMUNGE_sd1\n");
+    LABEL(_CMUNGE_sd1);
     fprintf(file, "\tSTMDB\tr13!,{r12}\n");
     fprintf(file, "\tIMPORT\t%s\n", opt.swi_decoder->handler);
     fprintf(file, "\tBL\t%s\n", opt.swi_decoder->handler);
     fprintf(file, "\tADD\tr13,r13,#4\n");
     fprintf(file, "\tSTR\tr0,[r13,#8]\n");
-    fprintf(file, "_CMUNGE_sd2\n");
+    LABEL(_CMUNGE_sd2);
     if (CODE26)
       fprintf(file, SUB_Lib_Reloc);
     else
