@@ -42,3 +42,15 @@ Command: $TOOL -throwback cmhg.bigtest -s s/bigtest -o o.bigtest -p -d h/bigtest
 Creates: h/bigtest h/bigtest_swis hdr/bigtest o/bigtest s/bigtest
 Expect: expect/examples/$ARG1
 Args: bigtest
+
+
+Group: Blank
+Replace: expect/command-replacements
+Text:Matches: expect/examples/$ARG1-cmhg
+Text:Replace: expect/output-replacements
+Expect: expect/examples/$ARG1
+
+Test: Blank generation
+Command: $TOOL -blank -throwback cmhg/blank
+Creates: cmhg/blank
+Args: blank
