@@ -55,6 +55,12 @@ Creates: s/bigtest
 Text:Matches: expect/examples/$ARG1-s32
 Args: bigtest
 
+Test: Big test of many of the features (s64)
+Command: $TOOL -throwback cmhg.$ARG1 -apcs 64 -s s/$ARG1 -p -DRobin=Genius -DNoBugsPlease -UJustin -I@.inc. -zbase
+Creates: s/bigtest
+Text:Matches: expect/examples/$ARG1-s64
+Args: bigtest
+
 
 Group: Blank
 Replace: expect/command-replacements
