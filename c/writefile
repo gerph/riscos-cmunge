@@ -168,6 +168,20 @@
       fprintf(file, ".word\t%s\n", var); \
   } while (0)
 
+#define BL_EXTERNAL(funcname) \
+    do { \
+        if (! CODE64) \
+            fprintf(file, "\tIMPORT\t%s\n", (funcname)); \
+        fprintf(file, "\tBL\t%s\n", (funcname)); \
+    } while (0)
+
+#define B_EXTERNAL(funcname) \
+    do { \
+        if (! CODE64) \
+            fprintf(file, "\tIMPORT\t%s\n", (funcname)); \
+        fprintf(file, "\tB\t%s\n", (funcname)); \
+    } while (0)
+
 
 
 static FILE *file;
@@ -462,6 +476,7 @@ static void commands(void) {
 /* JRF: 32bit'd */
   help_list l;
   int n,nentry;
+  int ncommands=0;
   int info;
 
   /* FIXME: Help entries can be commands - should work; or at least mirror CHMG */
@@ -528,6 +543,7 @@ static void commands(void) {
        out any veneers. */
     return;
   }
+  ncommands = nentry;
   l = opt.commands;
   n = 0; nentry=0;
   while (l) {
@@ -578,18 +594,44 @@ static void commands(void) {
         numentries++;
       l=l->next;
     }
-    fprintf(file, "\tMOV\tr14,pc\n");
-    fprintf(file, "\tADD\tr14,r14,# _CMUNGE_com_ret - _CMUNGE_com_pc\n");
-    fprintf(file, "_CMUNGE_com_pc\n");
-    fprintf(file, "\tCMP\tr2,#%i\n",numentries);
-    fprintf(file, "\tADDLO\tpc,pc,r2,LSL #2\n");
-    if (opt.helpfn)
+    if (! CODE64)
     {
-      fprintf(file, "\tIMPORT\t%s\n", opt.helpfn);
-      fprintf(file, "\tB\t%s\n", opt.helpfn);
+        fprintf(file, "\tMOV\tr14,pc\n");
+        fprintf(file, "\tADD\tr14,r14,# _CMUNGE_com_ret - _CMUNGE_com_pc\n");
+        fprintf(file, "_CMUNGE_com_pc\n");
+        fprintf(file, "\tCMP\tr2,#%i\n",numentries);
+        fprintf(file, "\tADDLO\tpc,pc,r2,LSL #2\n");
+        if (opt.helpfn)
+        {
+          fprintf(file, "\tIMPORT\t%s\n", opt.helpfn);
+          fprintf(file, "\tB\t%s\n", opt.helpfn);
+        }
+        else
+          fprintf(file, "\tB\t_CMUNGE_nocom_handler\n");
     }
     else
-      fprintf(file, "\tB\t_CMUNGE_nocom_handler\n");
+    {
+        fprintf(file, "\tADR\tx30, _CMUNGE_com_ret\n");
+        fprintf(file, "_CMUNGE_com_pc\n");
+        fprintf(file, "\tCMP\tx2,#%i\n",numentries);
+        fprintf(file, "\tBHS\t_CMUNGE_com_outofrange\n");
+        fprintf(file, "\tADR\tx4, _CMUNGE_com_dispatchtable\n");
+        fprintf(file, "\tADD\tx4, x4, x2, LSL #2\n");
+        fprintf(file, "\tBR\tx4\n");
+
+        LABEL(_CMUNGE_com_outofrange);
+        if (opt.helpfn)
+        { /* Global help handler, if we have one */
+            fprintf(file, "\tB\t%s\n", opt.helpfn);
+        }
+        else
+        {
+            /* Fall through to _CMUNGE_nocom_handler */
+            fprintf(file, "\tB\t_CMUNGE_nocom_handler\n");
+        }
+
+        LABEL(_CMUNGE_com_dispatchtable);
+    }
 
     l = opt.commands;
     while (l)
@@ -598,8 +640,11 @@ static void commands(void) {
       {
         if (l->handler)
         {
-          fprintf(file, "\tIMPORT\t%s\n", l->handler);
-          fprintf(file, "\tB\t%s\n", l->handler);
+            if (! CODE64)
+            {
+                fprintf(file, "\tIMPORT\t%s\n", l->handler);
+            }
+            fprintf(file, "\tB\t%s\n", l->handler);
         }
         else
         {
@@ -614,33 +659,64 @@ static void commands(void) {
     if (!opt.helpfn)
     {
       LABEL(_CMUNGE_nocom_handler);
-      fprintf(file, "\tMOV\tr0,#0\n"); /* no error (wrong!) */
+      if (! CODE64)
+      {
+          fprintf(file, "\tMOV\tr0,#0\n"); /* no error (wrong!) */
+      }
+      else
+      {
+          fprintf(file, "\tMOV\tx0,#0\n"); /* no error (wrong!) */
+      }
     }
     LABEL(_CMUNGE_com_ret);
   }
   else
   {
-    fprintf(file, "\tIMPORT\t%s\n", opt.helpfn);
-    fprintf(file, "\tBL\t%s\n", opt.helpfn);
+    BL_EXTERNAL(opt.helpfn);
   }
-  fprintf(file, SUB_Lib_Reloc);
-  fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
-  fprintf(file, "\tLDMIA\tr13!,{r1,r10,r11,r14}\n");
-  fprintf(file, "\tCMP\tr1,r0\n");
-  fprintf(file, "\tCMPNE\tr0,#0\n");
-  if (CODE26)
-    fprintf(file, "\tBICEQS\tpc,r14,#0x10000000\n");
-  else
-    fprintf(file, "\tMOVEQ\tpc,r14\n");
-  fprintf(file, "\tCMN\tr0,#1\n");
-  fprintf(file, "\tMOVEQ\tr0,#0\n");
-  if (CODE26)
-    fprintf(file, "\tORRS\tpc,r14,#0x10000000\n");
+  if (! CODE64)
+  {
+      fprintf(file, SUB_Lib_Reloc);
+      fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
+      fprintf(file, "\tLDMIA\tr13!,{r1,r10,r11,r14}\n");
+      fprintf(file, "\tCMP\tr1,r0\n");
+      fprintf(file, "\tCMPNE\tr0,#0\n");
+      if (CODE26)
+        fprintf(file, "\tBICEQS\tpc,r14,#0x10000000\n");
+      else
+        fprintf(file, "\tMOVEQ\tpc,r14\n");
+      fprintf(file, "\tCMN\tr0,#1\n");
+      fprintf(file, "\tMOVEQ\tr0,#0\n");
+      if (CODE26)
+        fprintf(file, "\tORRS\tpc,r14,#0x10000000\n");
+      else
+      {
+        fprintf(file, "\tMOV\tr1,#0\n");
+        fprintf(file, "\tCMP\tr1,#1<<31\n");
+        fprintf(file, "\tMOV\tpc,r14\n");
+      }
+  }
   else
   {
-    fprintf(file, "\tMOV\tr1,#0\n");
-    fprintf(file, "\tCMP\tr1,#1<<31\n");
-    fprintf(file, "\tMOV\tpc,r14\n");
+    /* Slightly different returns for the 64bit system:
+     *  If we return with x0=-1, the return value is 4, indicating a bad option?
+     */
+
+// x1=x0 => x0
+// x0=0  => x0
+// x0=-1 => 4   (new value for RISC OS 64)
+//       => x0
+
+      fprintf(file, "\tCMP\tx0, #0\n");
+      fprintf(file, "\tCCMP\tx0, x1, #4, ne\n");
+      fprintf(file, "\tBEQ\t_CMUNGE_ce_exit\n");
+      fprintf(file, "\tCMN\tw0, #1\n");
+      fprintf(file, "\tMOV\tx1, #4\n");
+      fprintf(file, "\tCSEL\tx0, x0, x1, ne\n");
+      LABEL(_CMUNGE_ce_exit);
+      fprintf(file, "\tRET\n");
+
+
   }
 }
 

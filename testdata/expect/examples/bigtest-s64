@@ -92,32 +92,30 @@ _CMUNGE_ce:
 	STP	x29, x30, [sp, #-16]!
 	STR	x0, [sp, -16]!
 	MOV	x3, x12
-	MOV	r14,pc
-	ADD	r14,r14,# _CMUNGE_com_ret - _CMUNGE_com_pc
+	ADR	x30, _CMUNGE_com_ret
 _CMUNGE_com_pc
-	CMP	r2,#5
-	ADDLO	pc,pc,r2,LSL #2
-	IMPORT	Mod_Commands
+	CMP	x2,#5
+	BHS	_CMUNGE_com_outofrange
+	ADR	x4, _CMUNGE_com_dispatchtable
+	ADD	x4, x4, x2, LSL #2
+	BR	x4
+_CMUNGE_com_outofrange:
 	B	Mod_Commands
+_CMUNGE_com_dispatchtable:
 	B	Mod_Commands
-	IMPORT	Mod_MimeMap
 	B	Mod_MimeMap
 	B	Mod_Commands
 	B	Mod_Commands
 	B	Mod_Commands
 _CMUNGE_com_ret:
-	; This is equivalent of 'SUB r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E24AA000
-	STMIA	r10,{r4,r5}
-	LDMIA	r13!,{r1,r10,r11,r14}
-	CMP	r1,r0
-	CMPNE	r0,#0
-	MOVEQ	pc,r14
-	CMN	r0,#1
-	MOVEQ	r0,#0
-	MOV	r1,#0
-	CMP	r1,#1<<31
-	MOV	pc,r14
+	CMP	x0, #0
+	CCMP	x0, x1, #4, ne
+	BEQ	_CMUNGE_ce_exit
+	CMN	w0, #1
+	MOV	x1, #4
+	CSEL	x0, x0, x1, ne
+_CMUNGE_ce_exit:
+	RET
 _CMUNGE_message_file:
 .asciz	"Resources:$.Resources.MimeMap.Messages"
 .balign	4
