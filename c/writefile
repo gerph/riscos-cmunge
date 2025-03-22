@@ -578,6 +578,7 @@ static void commands(void) {
   {
     /* 64bit entry sequence is a little easier */
     fprintf(file, "\tSTP\tx29, x30, [sp, #-16]!\n");
+    fprintf(file, "\tMOV\tx29, sp\n");
     fprintf(file, "\tSTR\tx0, [sp, -16]!\n");
     fprintf(file, "\tMOV\tx3, x12\n");
   }
@@ -715,8 +716,6 @@ static void commands(void) {
       fprintf(file, "\tCSEL\tx0, x0, x1, ne\n");
       LABEL(_CMUNGE_ce_exit);
       fprintf(file, "\tRET\n");
-
-
   }
 }
 
@@ -740,14 +739,26 @@ static void service(void) {
 
   if (!opt.service)
     return;
+  if (! CODE64) {
+  } else {
+    if (!opt.services) {
+        /* FIXME: 64bit RISC OS *must* supply the service numbers to handle */
+        ErrorFatal("Service numbers must be supplied for 64 bit RISC OS modules");
+    }
+  }
   if (opt.services) {
     unsigned int min = 0;
     unsigned int found;
 
     LABEL(_CMUNGE_service_fast);
-    WORD(0);
+    if (! CODE64) {
+        WORD(0);
+    } else {
+        WORD(1<<0); /* 64bit RISC OS always uses fast service entry */
+    }
     DCD_OFFSET(_CMUNGE_service_fast_entry, Fast service entry offset);
     /* List services in ascending order */
+    LABEL(_CMUNGE_service_index);
     do {
       found = 0;
       for (l = opt.services; l; l = l->next)
@@ -766,6 +777,7 @@ static void service(void) {
   }
   else
   {
+    /* Never needed for 64 bit as we must have the service numbers */
 #ifdef CMHG_REDUNDANT_FAST_SERVICE
     WORD(0);
     LABEL(_CMUNGE_service);
@@ -776,123 +788,169 @@ static void service(void) {
 #endif
   }
 
-  /* FIXME: Service selection code for 64bit */
-  if (opt.services) {
-    /* Do we have any 'big' numbers? */
-    big = 0;
-    for (l = opt.services; l; l = l->next) {
-      if (representable(l->val) != l->val) {
-        big = 1;
-        break;
+  /* Service selection code for 64bit is completely different - we always use
+   * the indexed fast service entry. */
+  if (! CODE64) {
+    if (opt.services) {
+      /* Do we have any 'big' numbers? */
+      big = 0;
+      for (l = opt.services; l; l = l->next) {
+        if (representable(l->val) != l->val) {
+          big = 1;
+          break;
+        }
       }
-    }
-    /* Now the rejection code */
-    if (big) {
-      fprintf(file, "\tSTR\tr14,[r13,#-4]!\n");
-    }
-    l = opt.services;
-    first = 1;
-    while (l) {
-      n = l->val;
-      m = representable(n);
-      if (n == m) {
-        if (first)
-          fprintf(file, "\tTEQ\tr1,#0x%02x\n", n);
-        else
-          fprintf(file, "\tTEQNE\tr1,#0x%02x\n", n);
-      } else {
-        fprintf(file, "\tMOV\tr14,#0x%02x\n", m);
-        n &= ~m;
-        do {
-          m = representable(n);
-          fprintf(file, "\tORR\tr14,r14,#0x%02x\n", m);
+      /* Now the rejection code */
+      if (big) {
+        fprintf(file, "\tSTR\tr14,[r13,#-4]!\n");
+      }
+
+      l = opt.services;
+      first = 1;
+      while (l) {
+        n = l->val;
+        m = representable(n);
+        if (n == m) {
+          if (first)
+            fprintf(file, "\tTEQ\tr1,#0x%02x\n", n);
+          else
+            fprintf(file, "\tTEQNE\tr1,#0x%02x\n", n);
+        } else {
+          fprintf(file, "\tMOV\tr14,#0x%02x\n", m);
           n &= ~m;
-        } while (n);
-        if (first)
-          fprintf(file, "\tTEQ\tr1,r14\n");
-        else
-          fprintf(file, "\tTEQNE\tr1,r14\n");
+          do {
+            m = representable(n);
+            fprintf(file, "\tORR\tr14,r14,#0x%02x\n", m);
+            n &= ~m;
+          } while (n);
+          if (first)
+            fprintf(file, "\tTEQ\tr1,r14\n");
+          else
+            fprintf(file, "\tTEQNE\tr1,r14\n");
+        }
+        l = l->next;
+        first = 0;
       }
-      l = l->next;
-      first = 0;
+      if (big) {
+        if (CODE26)
+          fprintf(file, "\tLDMNEIA\tr13!,{pc}^\n");
+        else
+          fprintf(file, "\tLDMNEIA\tr13!,{pc}\n");
+        /* CMHG is inefficient here, but I'll match it */
+        fprintf(file, "\tLDR\tr14,[r13],#4\n");
+      } else {
+        if (CODE26)
+          fprintf(file, "\tMOVNES\tpc,r14\n");
+        else
+          fprintf(file, "\tMOVNE\tpc,r14\n");
+      }
     }
-    if (big) {
-      if (CODE26)
-        fprintf(file, "\tLDMNEIA\tr13!,{pc}^\n");
-      else
-        fprintf(file, "\tLDMNEIA\tr13!,{pc}\n");
-      /* CMHG is inefficient here, but I'll match it */
-      fprintf(file, "\tLDR\tr14,[r13],#4\n");
-    } else {
-      if (CODE26)
-        fprintf(file, "\tMOVNES\tpc,r14\n");
-      else
-        fprintf(file, "\tMOVNE\tpc,r14\n");
+    fprintf(file, "_CMUNGE_service_fast_entry\n");
+    fprintf(file, "\tSTMDB\tr13!,{r0-r11,r14}\n");
+    fprintf(file, "\tMOV\tr0,r1\n");
+    fprintf(file, "\tMOV\tr1,r13\n");
+    if (CODE26)
+    {
+      fprintf(file, "\tMOV\tr6,pc\n");
+      fprintf(file, "\tBIC\tr3,r6,#3\n");
+      fprintf(file, "\tTEQP\tr3,#3\n");
     }
+    else
+    {
+      fprintf(file, "\tTEQ      pc,pc\n");
+      fprintf(file, "\tMOVNE    r8,pc\n");
+      fprintf(file, "\tBICNE    r3,r8,#3\n");
+      fprintf(file, "\tTEQNEP   r3,#3\n");
+      fprintf(file, "\tMRSEQ    r6,cpsr\n");
+      fprintf(file, "\tORREQ    r3,r6,#3\n");
+      fprintf(file, "\tMSREQ    cpsr_ctl,r3\n");
+    }
+    fprintf(file, "\tMOV\tr11,#0\n");
+    fprintf(file, "\tMOV\tr7,r14\n");
+    fprintf(file, "\tMOV\tr10,r13,LSR #20\n");
+    fprintf(file, "\tMOV\tr10,r10,LSL #20\n");
+    fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
+    // If we haven't set up the r12 value yet, we are not in an initialised state and trying
+    // to set up stacks or call the module will have dire consequences.
+    fprintf(file, "\tMOV\tr2,r12\n");
+    fprintf(file, "\tLDR\tr12,[r12,#0]\n");
+    fprintf(file, "\tTEQ\tr12, #0\n");
+    if (CODE26)
+    {
+      fprintf(file, "\tLDMNEIB\tr12,{r8,r9}\n");
+      fprintf(file, "\tSTMNEIA\tr10,{r8,r9}\n");
+    }
+    else
+    {
+      fprintf(file, "\tLDMNEIB\tr12,{r12,r14}\n");
+      fprintf(file, "\tSTMNEIA\tr10,{r12,r14}\n");
+    }
+    fprintf(file, ADD_Lib_Reloc);
+    fprintf(file, "\tIMPORT\t%s\n", opt.service);
+    fprintf(file, "\tBLNE\t%s\n", opt.service);
+    fprintf(file, "\tMOV\tr14,r7\n");
+    if (CODE26)
+    {
+      fprintf(file, "\tTEQP\tr6,#0\n");
+    }
+    else
+    {
+      fprintf(file, "\tTEQ      pc,pc\n");
+      fprintf(file, "\tMSREQ    cpsr_ctl,r6\n");
+      fprintf(file, "\tTEQNEP   r8,#0\n");
+    }
+    fprintf(file, SUB_Lib_Reloc);
+    fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
+    if (CODE26)
+      fprintf(file, "\tLDMIA\tr13!,{r0-r11,pc}^\n");
+    else
+      fprintf(file, "\tLDMIA\tr13!,{r0-r11,pc}\n");
+  } else {
+    fprintf(file, "\tRET\n"); /* Non-indexed entry point is never used */
+
+    /* 64bit fast service entry */
+    fprintf(file, "_CMUNGE_service_fast_entry\n");
+
+    fprintf(file, "\tSTP\tx29, x30, [sp, #-16]!\n");
+    fprintf(file, "\tMOV\tx29, sp\n");
+
+
+    // Store all the registers
+    fprintf(file, "\tSUB\tsp, sp, #4*12\n");
+    fprintf(file, "\tSTP\tw0, w1, [sp]\n");
+    fprintf(file, "\tSTP\tw2, w3, [sp, #4*2]\n");
+    fprintf(file, "\tSTP\tw4, w5, [sp, #4*4]\n");
+    fprintf(file, "\tSTP\tw6, w7, [sp, #4*6]\n");
+    fprintf(file, "\tSTP\tw8, w9, [sp, #4*8]\n");
+    fprintf(file, "\tMOV\tx1, sp\n");
+
+    // x1 = service number index
+    fprintf(file, "\tADR\tx16, _CMUNGE_service_index\n");
+    fprintf(file, "\tLDR\tw0, [x16, x1, LSL #2]\n");  // Obtain the service number
+
+    // Call entry point
+    fprintf(file, "\tBL\t%s\n", opt.service);
+
+    // Restore registers
+    fprintf(file, "\tMOV\tx10, x0\n");
+    fprintf(file, "\tLDP\tw0, w1, [sp]\n");
+    fprintf(file, "\tLDP\tw2, w3, [sp, #4*2]\n");
+    fprintf(file, "\tLDP\tw4, w5, [sp, #4*4]\n");
+    fprintf(file, "\tLDP\tw6, w7, [sp, #4*6]\n");
+    fprintf(file, "\tLDP\tw8, w9, [sp, #4*8]\n");
+    fprintf(file, "\tADD\tsp, sp, #4*12\n");
+
+    fprintf(file, "\tLDP\tx29, x30, [sp], #16\n");
+    fprintf(file, "\tRET\n");
   }
-  fprintf(file, "_CMUNGE_service_fast_entry\n");
-  fprintf(file, "\tSTMDB\tr13!,{r0-r11,r14}\n");
-  fprintf(file, "\tMOV\tr0,r1\n");
-  fprintf(file, "\tMOV\tr1,r13\n");
-  if (CODE26)
-  {
-    fprintf(file, "\tMOV\tr6,pc\n");
-    fprintf(file, "\tBIC\tr3,r6,#3\n");
-    fprintf(file, "\tTEQP\tr3,#3\n");
-  }
-  else
-  {
-    fprintf(file, "\tTEQ      pc,pc\n");
-    fprintf(file, "\tMOVNE    r8,pc\n");
-    fprintf(file, "\tBICNE    r3,r8,#3\n");
-    fprintf(file, "\tTEQNEP   r3,#3\n");
-    fprintf(file, "\tMRSEQ    r6,cpsr\n");
-    fprintf(file, "\tORREQ    r3,r6,#3\n");
-    fprintf(file, "\tMSREQ    cpsr_ctl,r3\n");
-  }
-  fprintf(file, "\tMOV\tr11,#0\n");
-  fprintf(file, "\tMOV\tr7,r14\n");
-  fprintf(file, "\tMOV\tr10,r13,LSR #20\n");
-  fprintf(file, "\tMOV\tr10,r10,LSL #20\n");
-  fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
-  // If we haven't set up the r12 value yet, we are not in an initialised state and trying
-  // to set up stacks or call the module will have dire consequences.
-  fprintf(file, "\tMOV\tr2,r12\n");
-  fprintf(file, "\tLDR\tr12,[r12,#0]\n");
-  fprintf(file, "\tTEQ\tr12, #0\n");
-  if (CODE26)
-  {
-    fprintf(file, "\tLDMNEIB\tr12,{r8,r9}\n");
-    fprintf(file, "\tSTMNEIA\tr10,{r8,r9}\n");
-  }
-  else
-  {
-    fprintf(file, "\tLDMNEIB\tr12,{r12,r14}\n");
-    fprintf(file, "\tSTMNEIA\tr10,{r12,r14}\n");
-  }
-  fprintf(file, ADD_Lib_Reloc);
-  fprintf(file, "\tIMPORT\t%s\n", opt.service);
-  fprintf(file, "\tBLNE\t%s\n", opt.service);
-  fprintf(file, "\tMOV\tr14,r7\n");
-  if (CODE26)
-  {
-    fprintf(file, "\tTEQP\tr6,#0\n");
-  }
-  else
-  {
-    fprintf(file, "\tTEQ      pc,pc\n");
-    fprintf(file, "\tMSREQ    cpsr_ctl,r6\n");
-    fprintf(file, "\tTEQNEP   r8,#0\n");
-  }
-  fprintf(file, SUB_Lib_Reloc);
-  fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
-  if (CODE26)
-    fprintf(file, "\tLDMIA\tr13!,{r0-r11,pc}^\n");
-  else
-    fprintf(file, "\tLDMIA\tr13!,{r0-r11,pc}\n");
 }
 
 static void start(void) {
+
+  if (! CODE64) {
+  } else {
+    ErrorFatal("Start code not implemented for RISC OS 64 bit module");
+  }
 
   if (opt.runnable) {
     LABEL(_CMUNGE_start);
