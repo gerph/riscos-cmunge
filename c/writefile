@@ -1070,126 +1070,185 @@ static void init(void) {
 
   fprintf(file, "\n");
   LABEL(_CMUNGE_init);
-  /* FIXME: Not supported for 64bit yet */
-  fprintf(file, "\tSTMFD\tr13!,{r7-r11,r14}\n");
-  fprintf(file, "\tMOV\tr0,#%i\n",opt.reentrant ? 1 : 0);
-  if (opt.lib_init) {
-    fprintf(file, "\tIMPORT\t%s\n", opt.lib_init);
-    fprintf(file, "\tBL\t%s\n", opt.lib_init);
+  if (! CODE64) {
+    /* FIXME: Not supported for 64bit yet */
+    fprintf(file, "\tSTMFD\tr13!,{r7-r11,r14}\n");
+    fprintf(file, "\tMOV\tr0,#%i\n",opt.reentrant ? 1 : 0);
+    if (opt.lib_init) {
+      fprintf(file, "\tIMPORT\t%s\n", opt.lib_init);
+      fprintf(file, "\tBL\t%s\n", opt.lib_init);
+    } else {
+      fprintf(file, "\tIMPORT\t_clib_initialisemodule\n");
+      fprintf(file, "\tBL\t_clib_initialisemodule\n");
+    }
   } else {
-    fprintf(file, "\tIMPORT\t_clib_initialisemodule\n");
-    fprintf(file, "\tBL\t_clib_initialisemodule\n");
+    fprintf(file, "\tSTP\tx29, x30, [sp, #-16]!\n");
+    fprintf(file, "\tMOV\tx29, sp\n");
+    fprintf(file, "\tSTR\tx12, [sp, #-16]!\n");
+    fprintf(file, "\tSTP\tx0, x1, [sp, #-16]!\n");
+    fprintf(file, "\tMOV\tx0, x12\n");
+    if (opt.lib_init) {
+      fprintf(file, "\tBL\t%s\n", opt.lib_init);
+    } else {
+      fprintf(file, "\tBL\t_clib_initialisemodule\n");
+    }
   }
+
   if (!opt.init && !opt.cplusplus) {
-    fprintf(file, "\tLDMIA\tr13!,{r7-r11,pc}\n");
+    if (! CODE64) {
+      fprintf(file, "\tLDMIA\tr13!,{r7-r11,pc}\n");
+    } else {
+      /* We'll fall through to the failure case (the r0 value is a pointer to an error or 0) */
+    }
   } else {
-    if (CODE26)
-    {
-      fprintf(file, "\tLDMVSIA\tr13!,{r7-r11,pc}\n");
-      fprintf(file, "\tMOV\tr6,r0\n");
-      fprintf(file, SUB_Lib_Reloc);
-      fprintf(file, "\tLDMIA\tr10,{r0,r1}\n");
-      fprintf(file, "\tSUB\tr10,r10,#0x14\n");
-      fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
-      fprintf(file, "\tSTMIA\tr10,{r0,r1}\n");
-      fprintf(file, ADD_Lib_Reloc);
-      fprintf(file, "\tMOV\tr11,#0\n");
+    if (! CODE64) {
+      if (CODE26)
+      {
+        fprintf(file, "\tLDMVSIA\tr13!,{r7-r11,pc}\n");
+        fprintf(file, "\tMOV\tr6,r0\n");
+        fprintf(file, SUB_Lib_Reloc);
+        fprintf(file, "\tLDMIA\tr10,{r0,r1}\n");
+        fprintf(file, "\tSUB\tr10,r10,#0x14\n");
+        fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
+        fprintf(file, "\tSTMIA\tr10,{r0,r1}\n");
+        fprintf(file, ADD_Lib_Reloc);
+        fprintf(file, "\tMOV\tr11,#0\n");
+        if (opt.cplusplus)
+        {
+          if (opt.toolchain == tc_gcc)
+          {
+            fprintf(file, "\tIMPORT\t__gccmain\n");
+            fprintf(file, "\tBL\t__gccmain\n");
+          }
+          else
+          {
+            fprintf(file, "\tIMPORT\t______main\n");
+            fprintf(file, "\tBL\t______main\n");
+          }
+        }
+        if (opt.init)
+        {
+          fprintf(file, "\tADD\tr0,r13,#0xc\n");
+          fprintf(file, "\tLDMIA\tr0,{r0,r1}\n");
+          fprintf(file, "\tMOV\tr2,r6\n");
+          fprintf(file, "\tIMPORT\t%s\n", opt.init);
+          fprintf(file, "\tBL\t%s\n", opt.init);
+          fprintf(file, "\tTEQ\tr0,#0\n");
+          fprintf(file, "\tBEQ\t_CMUNGE_init_10\n");
+          fprintf(file, "\tSTR\tr0,[r13,#-4]!\n");
+          fprintf(file, "\tMOV\tr0,r6\n");
+          if (!finalise_imported)
+            fprintf(file, "\tIMPORT\t_clib_finalisemodule\n"), finalise_imported = 1;
+          fprintf(file, "\tBL\t_clib_finalisemodule\n");
+          fprintf(file, "\tLDR\tr0,[r13],#4\n");
+          fprintf(file, "_CMUNGE_init_10\n");
+          fprintf(file, SUB_Lib_Reloc);
+          fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
+          fprintf(file, "\tTEQ\tr0,#0\n");
+          fprintf(file, "\tLDMEQIA\tr13!,{r7-r11,pc}^\n");
+          fprintf(file, "\tLDMIA\tr13!,{r7-r11,r14}\n");
+          fprintf(file, "\tORRS\tpc,r14,#0x10000000\n");
+        }
+        else
+        {
+          fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
+          fprintf(file, "\tLDMIA\tr13!,{r7-r11,pc}^\n");
+        }
+      }
+      else
+      {
+        fprintf(file, "\tLDMVSIA\tr13!,{r7-r11,pc}\n");
+        fprintf(file, "\tMOV\tr6,r0\n");
+        fprintf(file, SUB_Lib_Reloc);
+        fprintf(file, "\tLDMIA\tr10,{r0,r1}\n");
+        fprintf(file, "\tSUB\tr10,r10,#0x14\n");
+        fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
+        fprintf(file, "\tSTMIA\tr10,{r0,r1}\n");
+        fprintf(file, ADD_Lib_Reloc);
+        fprintf(file, "\tMOV\tr11,#0\n");
+        if (opt.cplusplus)
+        {
+          if (opt.toolchain == tc_gcc)
+          {
+            fprintf(file, "\tIMPORT\t__gccmain\n");
+            fprintf(file, "\tBL\t__gccmain\n");
+          }
+          else
+          {
+            fprintf(file, "\tIMPORT\t______main\n");
+            fprintf(file, "\tBL\t______main\n");
+          }
+        }
+        if (opt.init)
+        {
+          fprintf(file, "\tADD\tr0,r13,#0xc\n");
+          fprintf(file, "\tLDMIA\tr0,{r0,r1}\n");
+          fprintf(file, "\tMOV\tr2,r6\n");
+          fprintf(file, "\tIMPORT\t%s\n", opt.init);
+          fprintf(file, "\tBL\t%s\n", opt.init);
+          fprintf(file, "\tTEQ\tr0,#0\n");
+          fprintf(file, "\tBEQ\t_CMUNGE_init_10\n");
+          fprintf(file, "\tSTR\tr0,[r13,#-4]!\n");
+          fprintf(file, "\tMOV\tr0,r6\n");
+          if (!finalise_imported)
+            fprintf(file, "\tIMPORT\t_clib_finalisemodule\n"), finalise_imported = 1;
+          fprintf(file, "\tBL\t_clib_finalisemodule\n");
+          fprintf(file, "\tLDR\tr0,[r13],#4\n");
+          fprintf(file, "_CMUNGE_init_10\n");
+          fprintf(file, SUB_Lib_Reloc);
+          fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
+          fprintf(file, "\tCMP\tr0,#0\n");
+          fprintf(file, "\tMOVNE\tr1,#0\n");
+          fprintf(file, "\tCMPNE\tr1,#1<<31\n");
+          fprintf(file, "\tLDMIA\tr13!,{r7-r11,pc}\n");
+        }
+        else
+        {
+          fprintf(file, "\tCMP\tr0,r0\n"); /* Clear V */
+          fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
+          fprintf(file, "\tLDMIA\tr13!,{r7-r11,pc}\n");
+        }
+      }
+    } else {
+      /* 64 Bit init entry */
+      fprintf(file, "\tCMP\tx0, #0\n");
+      fprintf(file, "\tBNE\t_CMUNGE_init_fail\n");
+
       if (opt.cplusplus)
       {
         if (opt.toolchain == tc_gcc)
         {
-          fprintf(file, "\tIMPORT\t__gccmain\n");
           fprintf(file, "\tBL\t__gccmain\n");
         }
         else
         {
-          fprintf(file, "\tIMPORT\t______main\n");
           fprintf(file, "\tBL\t______main\n");
         }
       }
-      if (opt.init)
-      {
-        fprintf(file, "\tADD\tr0,r13,#0xc\n");
-        fprintf(file, "\tLDMIA\tr0,{r0,r1}\n");
-        fprintf(file, "\tMOV\tr2,r6\n");
-        fprintf(file, "\tIMPORT\t%s\n", opt.init);
-        fprintf(file, "\tBL\t%s\n", opt.init);
-        fprintf(file, "\tTEQ\tr0,#0\n");
-        fprintf(file, "\tBEQ\t_CMUNGE_init_10\n");
-        fprintf(file, "\tSTR\tr0,[r13,#-4]!\n");
-        fprintf(file, "\tMOV\tr0,r6\n");
-        if (!finalise_imported)
-          fprintf(file, "\tIMPORT\t_clib_finalisemodule\n"), finalise_imported = 1;
+
+      if (opt.init) {
+        fprintf(file, "\tLDP\tx0, x2, [sp], #16\n");
+        fprintf(file, "\tLDR\tx1, [sp]\n");
+        fprintf(file, "\tBL\t%s                    // (tail, instance (0), pwp)\n", opt.init);
+        fprintf(file, "\tCMP\tx0, #0\n");
+        fprintf(file, "\tBEQ\t_CMUNGE_init_exit\n");
+        fprintf(file, "\tSTR\tx0, [sp, #8]                // preserve error pointer\n");
+        fprintf(file, "\tLDR\tx0, [sp]\n");
         fprintf(file, "\tBL\t_clib_finalisemodule\n");
-        fprintf(file, "\tLDR\tr0,[r13],#4\n");
-        fprintf(file, "_CMUNGE_init_10\n");
-        fprintf(file, SUB_Lib_Reloc);
-        fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
-        fprintf(file, "\tTEQ\tr0,#0\n");
-        fprintf(file, "\tLDMEQIA\tr13!,{r7-r11,pc}^\n");
-        fprintf(file, "\tLDMIA\tr13!,{r7-r11,r14}\n");
-        fprintf(file, "\tORRS\tpc,r14,#0x10000000\n");
-      }
-      else
-      {
-        fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
-        fprintf(file, "\tLDMIA\tr13!,{r7-r11,pc}^\n");
+        fprintf(file, "\tLDR\tx0, [sp, #8]\n");
+        fprintf(file, "\tB\t_CMUNGE_init_exit\n");
       }
     }
-    else
-    {
-      fprintf(file, "\tLDMVSIA\tr13!,{r7-r11,pc}\n");
-      fprintf(file, "\tMOV\tr6,r0\n");
-      fprintf(file, SUB_Lib_Reloc);
-      fprintf(file, "\tLDMIA\tr10,{r0,r1}\n");
-      fprintf(file, "\tSUB\tr10,r10,#0x14\n");
-      fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
-      fprintf(file, "\tSTMIA\tr10,{r0,r1}\n");
-      fprintf(file, ADD_Lib_Reloc);
-      fprintf(file, "\tMOV\tr11,#0\n");
-      if (opt.cplusplus)
-      {
-        if (opt.toolchain == tc_gcc)
-        {
-          fprintf(file, "\tIMPORT\t__gccmain\n");
-          fprintf(file, "\tBL\t__gccmain\n");
-        }
-        else
-        {
-          fprintf(file, "\tIMPORT\t______main\n");
-          fprintf(file, "\tBL\t______main\n");
-        }
-      }
-      if (opt.init)
-      {
-        fprintf(file, "\tADD\tr0,r13,#0xc\n");
-        fprintf(file, "\tLDMIA\tr0,{r0,r1}\n");
-        fprintf(file, "\tMOV\tr2,r6\n");
-        fprintf(file, "\tIMPORT\t%s\n", opt.init);
-        fprintf(file, "\tBL\t%s\n", opt.init);
-        fprintf(file, "\tTEQ\tr0,#0\n");
-        fprintf(file, "\tBEQ\t_CMUNGE_init_10\n");
-        fprintf(file, "\tSTR\tr0,[r13,#-4]!\n");
-        fprintf(file, "\tMOV\tr0,r6\n");
-        if (!finalise_imported)
-          fprintf(file, "\tIMPORT\t_clib_finalisemodule\n"), finalise_imported = 1;
-        fprintf(file, "\tBL\t_clib_finalisemodule\n");
-        fprintf(file, "\tLDR\tr0,[r13],#4\n");
-        fprintf(file, "_CMUNGE_init_10\n");
-        fprintf(file, SUB_Lib_Reloc);
-        fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
-        fprintf(file, "\tCMP\tr0,#0\n");
-        fprintf(file, "\tMOVNE\tr1,#0\n");
-        fprintf(file, "\tCMPNE\tr1,#1<<31\n");
-        fprintf(file, "\tLDMIA\tr13!,{r7-r11,pc}\n");
-      }
-      else
-      {
-        fprintf(file, "\tCMP\tr0,r0\n"); /* Clear V */
-        fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
-        fprintf(file, "\tLDMIA\tr13!,{r7-r11,pc}\n");
-      }
-    }
+  }
+
+  if (! CODE64) {
+  } else {
+    fprintf(file, "_CMUNGE_init_fail:\n");
+    fprintf(file, "\tADD\tsp, sp, #16\n");
+    fprintf(file, "_CMUNGE_init_exit:\n");
+    fprintf(file, "\tADD\tsp, sp, #16\n");
+    fprintf(file, "\tLDP\tx29, x30, [sp], #16\n");
+    fprintf(file, "\tRET\n");
   }
 }
 
@@ -1199,69 +1258,86 @@ static void final(void) {
     return;
 
   LABEL(_CMUNGE_fin);
-  /* FIXME: Not supported for 64bit yet */
-  if (opt.final) {
-    /* JRF: 32bit ok */
-    fprintf(file, "\tSTMDB\tr13!,{r7-r12,r14}\n");
-    fprintf(file, "\tMOV\tr10,r13,LSR #20\n");
-    fprintf(file, "\tMOV\tr10,r10,LSL #20\n");
-    fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
-    fprintf(file, "\tLDR\tr12,[r12,#0]\n");
-    fprintf(file, "\tLDMIB\tr12,{r11,r12}\n");
-    fprintf(file, "\tSTMIA\tr10,{r11,r12}\n");
-    fprintf(file, ADD_Lib_Reloc);
-    fprintf(file, "\tMOV\tr11,#0\n");
-    fprintf(file, "\tADD\tr0,r13,#0xc\n");
-    fprintf(file, "\tLDMIA\tr0,{r0-r2}\n");
-    fprintf(file, "\tIMPORT\t%s\n", opt.final);
-    fprintf(file, "\tBL\t%s\n", opt.final);
-    fprintf(file, "\tCMP\tr0,#0\n");
-    if (CODE26)
-    {
-      fprintf(file, "\tLDREQ\tr0,[r13,#0x14]\n");
-      if (!finalise_imported)
-        fprintf(file, "\tIMPORT\t_clib_finalisemodule\n"), finalise_imported = 1;
-      fprintf(file, "\tBLEQ\t_clib_finalisemodule\n");
-      if (opt.runnable == run_rmaapp_simple)
-        fprintf(file,"\tBLEQ\t_CMUNGE_freeappstack\n");
-    }
-    else
-    {
-      fprintf(file, "\tBNE\t_CMUNGE_final_10\n");
-      fprintf(file, "\tLDR\tr0,[r13,#0x14]\n");
-      if (!finalise_imported)
-        fprintf(file, "\tIMPORT\t_clib_finalisemodule\n"), finalise_imported = 1;
-      fprintf(file, "\tBL\t_clib_finalisemodule\n");
-      if (opt.runnable == run_rmaapp_simple)
-        fprintf(file,"\tBL\t_CMUNGE_freeappstack\n");
-      fprintf(file, "\tMOVS\tr0,#0\n");
-      fprintf(file,"_CMUNGE_final_10\n");
-    }
-    fprintf(file, SUB_Lib_Reloc);
-    fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
-    if (CODE26)
-    {
-      fprintf(file, "\tLDMEQIA\tr13!,{r7-r12,pc}^\n");
-      fprintf(file, "\tLDMIA\tr13!,{r7-r12,r14}\n");
-      fprintf(file, "\tORRS\tpc,r14,#0x10000000\n");
-    }
-    else
-    {
-      fprintf(file, "\tMOVNE\tr1,#0\n");
-      fprintf(file, "\tCMPNE\tr1,#1<<31\n");
-      fprintf(file, "\tLDMIA\tr13!,{r7-r12,pc}\n");
-    }
-  } else {
+  if (! CODE64) {
     fprintf(file, "\tSTMDB\tr13!,{r7-r11,r14}\n");
     fprintf(file, "\tMOV\tr10,r13,LSR #20\n");
     fprintf(file, "\tMOV\tr10,r10,LSL #20\n");
     fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
-    fprintf(file, "\tMOV\tr0,r12\n");
-    fprintf(file, "\tLDR\tr12,[r12]\n");
-    fprintf(file, "\tLDMIB\tr12,{r11,r12}\n");
-    fprintf(file, "\tSTMIA\tr10,{r11,r12}\n");
+    fprintf(file, "\tLDR\tr14,[r12]\n");
+    fprintf(file, "\tLDMIB\tr14,{r11,r14}\n");
+    fprintf(file, "\tSTMIA\tr10,{r11,r14}\n");
     fprintf(file, ADD_Lib_Reloc);
     fprintf(file, "\tMOV\tr11,#0\n");
+  } else {
+    fprintf(file, "\tSTP\tx29, x30, [sp, #-16]!\n");
+    fprintf(file, "\tMOV\tx29, sp\n");
+    fprintf(file, "\tSTR\tx12, [sp, #-16]!\n");
+  }
+  if (opt.final) {
+    if (! CODE64) {
+      /* JRF: 32bit ok */
+      fprintf(file, "\tADD\tr0,r13,#0xc\n");
+      fprintf(file, "\tLDMIA\tr0,{r0-r2}\n");
+      fprintf(file, "\tIMPORT\t%s\n", opt.final);
+      fprintf(file, "\tBL\t%s\n", opt.final);
+      fprintf(file, "\tCMP\tr0,#0\n");
+      if (CODE26)
+      {
+        fprintf(file, "\tLDREQ\tr0,[r13,#0x14]\n");
+        if (!finalise_imported)
+          fprintf(file, "\tIMPORT\t_clib_finalisemodule\n"), finalise_imported = 1;
+        fprintf(file, "\tBLEQ\t_clib_finalisemodule\n");
+        if (opt.runnable == run_rmaapp_simple)
+          fprintf(file,"\tBLEQ\t_CMUNGE_freeappstack\n");
+      }
+      else
+      {
+        fprintf(file, "\tBNE\t_CMUNGE_final_10\n");
+        fprintf(file, "\tLDR\tr0,[r13,#0x14]\n");
+        if (!finalise_imported)
+          fprintf(file, "\tIMPORT\t_clib_finalisemodule\n"), finalise_imported = 1;
+        fprintf(file, "\tBL\t_clib_finalisemodule\n");
+        if (opt.runnable == run_rmaapp_simple)
+          fprintf(file,"\tBL\t_CMUNGE_freeappstack\n");
+        fprintf(file, "\tMOVS\tr0,#0\n");
+        fprintf(file,"_CMUNGE_final_10\n");
+      }
+      fprintf(file, SUB_Lib_Reloc);
+      fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
+      if (CODE26)
+      {
+        fprintf(file, "\tLDMEQIA\tr13!,{r7-r12,pc}^\n");
+        fprintf(file, "\tLDMIA\tr13!,{r7-r12,r14}\n");
+        fprintf(file, "\tORRS\tpc,r14,#0x10000000\n");
+      }
+      else
+      {
+        fprintf(file, "\tMOVNE\tr1,#0\n");
+        fprintf(file, "\tCMPNE\tr1,#1<<31\n");
+        fprintf(file, "\tLDMIA\tr13!,{r7-r12,pc}\n");
+      }
+    } else {
+      fprintf(file, "\tSTP\tx0, x1, [sp, #-16]!\n");
+      fprintf(file, "\tMOV\tx0, #1 // always fatal\n");
+      fprintf(file, "\tMOV\tx1, #0 // no podule base\n");
+      fprintf(file, "\tMOV\tx2, x12\n");
+      fprintf(file, "\tBL\t%s\n", opt.final);
+      fprintf(file, "\tCMP\tx0,#0\n");
+      fprintf(file, "\tBNE\t_CMUNGE_final_10\n");
+      fprintf(file, "\tSTR\tx0, [sp, #8]                // preserve error pointer\n");
+      fprintf(file, "\tLDR\tx0, [sp]\n");
+      fprintf(file, "\tBL\t_clib_finalisemodule\n");
+      if (opt.runnable == run_rmaapp_simple)
+        ErrorFatal("rmaapp simple not supported for 64bit");
+      fprintf(file, "\tLDR\tx0, [sp, #8]\n");
+
+      LABEL(_CMUNGE_final_10);
+      fprintf(file, "\tADD\tsp, sp, #16\n");
+      fprintf(file, "\tLDP\tx29, x30, [sp], #16\n");
+      fprintf(file, "\tRET\n");
+    }
+  } else {
+    fprintf(file, "\tMOV\tr0,r12\n");
     if (!finalise_imported)
       fprintf(file, "\tIMPORT\t_clib_finalisemodule\n"), finalise_imported = 1;
     fprintf(file, "\tBL\t_clib_finalisemodule\n");
