@@ -1371,24 +1371,30 @@ static void swi_handler(void) {
   /* JRF: 32bit ok */
   if (!opt.swi_base)
     return;
+
   LABEL(_CMUNGE_swi_handler);
-  /* FIXME: Not supported for 64bit yet */
-  fprintf(file, "\tSTMDB\tr13!,{r0-r9,r14}\n");
-  if (CODE26)
-  {}
-  else
-    fprintf(file, "\tMRS\tr8,cpsr\n");
-  fprintf(file, "\tMOV\tr10,r13,LSR #20\n");
-  fprintf(file, "\tMOV\tr10,r10,LSL #20\n");
-  fprintf(file, "\tMOV\tr0,r11\n");
-  fprintf(file, "\tMOV\tr1,r13\n");
-  fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
-  fprintf(file, "\tMOV\tr2,r12\n");
-  fprintf(file, "\tLDR\tr12,[r12]\n");
-  fprintf(file, "\tLDMIB\tr12,{r11,r12}\n");
-  fprintf(file, "\tSTMIA\tr10,{r11,r12}\n");
-  fprintf(file, ADD_Lib_Reloc);
-  fprintf(file, "\tMOV\tr11,#0\n");
+  if (! CODE64) {
+    fprintf(file, "\tSTMDB\tr13!,{r0-r9,r14}\n");
+    if (CODE26)
+    {}
+    else
+      fprintf(file, "\tMRS\tr8,cpsr\n");
+    fprintf(file, "\tMOV\tr10,r13,LSR #20\n");
+    fprintf(file, "\tMOV\tr10,r10,LSL #20\n");
+    fprintf(file, "\tMOV\tr0,r11\n");
+    fprintf(file, "\tMOV\tr1,r13\n");
+    fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
+    fprintf(file, "\tMOV\tr2,r12\n");
+    fprintf(file, "\tLDR\tr12,[r12]\n");
+    fprintf(file, "\tLDMIB\tr12,{r11,r12}\n");
+    fprintf(file, "\tSTMIA\tr10,{r11,r12}\n");
+    fprintf(file, ADD_Lib_Reloc);
+    fprintf(file, "\tMOV\tr11,#0\n");
+  } else {
+    fprintf(file, "\tSTP\tx29, x30, [sp, #-16]!\n");
+    fprintf(file, "\tMOV\tx2, x12\n");
+  }
+
   if (opt.swi_codesupplied)
   {
     swi_list l;
@@ -1400,102 +1406,136 @@ static void swi_handler(void) {
       numswis++;
       l=l->next;
     }
-    fprintf(file, "\tMOV\tr14,pc\n");
-    fprintf(file, "\tADD\tr14,r14,# _CMUNGE_swi_ret - _CMUNGE_swi_pc\n");
-    LABEL(_CMUNGE_swi_pc);
-    fprintf(file, "\tCMP\tr0,#%i\n",numswis);
-    fprintf(file, "\tADDLT\tpc,pc,r0,LSL #2\n");
-    if (opt.swi_handler)
-    {
-      fprintf(file, "\tIMPORT\t%s\n", opt.swi_handler);
-      fprintf(file, "\tB\t%s\n", opt.swi_handler);
+    if (! CODE64) {
+      fprintf(file, "\tMOV\tr14,pc\n");
+      fprintf(file, "\tADD\tr14,r14,# _CMUNGE_swi_ret - _CMUNGE_swi_pc\n");
+      LABEL(_CMUNGE_swi_pc);
+      fprintf(file, "\tCMP\tr0,#%i\n",numswis);
+      fprintf(file, "\tADDLT\tpc,pc,r0,LSL #2\n");
+      if (opt.swi_handler)
+      {
+        fprintf(file, "\tIMPORT\t%s\n", opt.swi_handler);
+        fprintf(file, "\tB\t%s\n", opt.swi_handler);
+      }
+      else
+      {
+        fprintf(file, "\tB\t_CMUNGE_noswi_handler\n");
     }
-    else
-      fprintf(file, "\tB\t_CMUNGE_noswi_handler\n");
+    } else {
+      fprintf(file, "\tCMP\tx0, #%i - 1\n", numswis);
+      fprintf(file, "\tBHI\t_CMUNGE_noswi_handler\n");
+      fprintf(file, "\tADR\tx3, _CMUNGE_swi_dispatch\n");
+      fprintf(file, "\tLDR\tw4, [x3, x0, LSL #2]\n");
+      fprintf(file, "\tADD\tx3, x3, w4, uxtw\n");
+      fprintf(file, "\tADR\tx30, _CMUNGE_swi_ret\n");
+      fprintf(file, "\tBR\tx3                          // (regs, swino, pwp)\n");
+      LABEL(_CMUNGE_swi_dispatch);
+    }
 
     l = opt.swi_names->next; /* First one must be valid */
     while (l)
     {
-      if (l->handler)
+      char *handler = l->handler;
+      if (handler)
       {
-        fprintf(file, "\tIMPORT\t%s\n", l->handler);
-        fprintf(file, "\tB\t%s\n", l->handler);
+        if (! CODE64) {
+          fprintf(file, "\tIMPORT\t%s\n", l->handler);
+        }
       }
       else
       {
         if (opt.swi_handler)
-          fprintf(file, "\tB\t%s\n", opt.swi_handler);
+          handler = opt.swi_handler;
         else
-          fprintf(file, "\tB\t_CMUNGE_noswi_handler\n");
+          handler = "_CMUNGE_noswi_handler";
+      }
+      if (! CODE64) {
+        fprintf(file, "\tB\t%s\n", handler);
+      } else {
+        fprintf(file, ".word %s - _CMUNGE_swi_dispatch\n", handler);
       }
       l=l->next;
     }
-    if (!opt.swi_handler)
+    if (!opt.swi_handler || CODE64)
     {
       LABEL(_CMUNGE_noswi_handler);
-      fprintf(file, "\tMOV\tr0,#-1\n"); /* 'SWI not known' */
+      if (! CODE64) {
+        fprintf(file, "\tMOV\tr0,#-1\n"); /* 'SWI not known' */
+      } else {
+        fprintf(file, "\tMOV\tx0,#-1\n"); /* 'SWI not known' */
+      }
     }
     LABEL(_CMUNGE_swi_ret);
-  }
-  else
-  {
-    fprintf(file, "\tIMPORT\t%s\n", opt.swi_handler);
+  } else {
+    if (! CODE64) {
+      fprintf(file, "\tIMPORT\t%s\n", opt.swi_handler);
+    }
     fprintf(file, "\tBL\t%s\n", opt.swi_handler);
   }
-  fprintf(file, SUB_Lib_Reloc);
-  fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
-  fprintf(file, "\tTEQ\tr0,#0\n");
-  if (CODE26)
-    fprintf(file, "\tLDMEQIA\tr13!,{r0-r9,pc}^\n");
-  else
-  {
-    fprintf(file, "\tBNE      _CMUNGE_swi_10\n");
-    fprintf(file, "\tTEQ      pc,pc\n");
-    fprintf(file, "\tLDMNEIA  r13!,{r0-r9,pc}^\n");
-    fprintf(file, "\tDCD &e12ff008 ; MSR cpsr_cxsf,r8\n");
-    fprintf(file, "\tLDMIA    r13!,{r0-r9,pc}\n");
-    fprintf(file, "_CMUNGE_swi_10\n");
+  if (! CODE64) {
+    fprintf(file, SUB_Lib_Reloc);
+    fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
+    fprintf(file, "\tTEQ\tr0,#0\n");
+    if (CODE26)
+      fprintf(file, "\tLDMEQIA\tr13!,{r0-r9,pc}^\n");
+    else
+    {
+      fprintf(file, "\tBNE      _CMUNGE_swi_10\n");
+      fprintf(file, "\tTEQ      pc,pc\n");
+      fprintf(file, "\tLDMNEIA  r13!,{r0-r9,pc}^\n");
+      fprintf(file, "\tDCD &e12ff008 ; MSR cpsr_cxsf,r8\n");
+      fprintf(file, "\tLDMIA    r13!,{r0-r9,pc}\n");
+      fprintf(file, "_CMUNGE_swi_10\n");
+    }
+    fprintf(file, "\tADD\tr13,r13,#4\n");
+    fprintf(file, "\tCMN\tr0,#1\n");
+    if (CODE26)
+    {
+      fprintf(file, "\tLDMNEIA\tr13!,{r1-r9,r14}\n");
+      fprintf(file, "\tORRNES\tpc,r14,#0x10000000\n");
+    }
+    else
+    {
+      fprintf(file, "\tBEQ      _CMUNGE_swi_30\n");
+      LABEL(_CMUNGE_swi_20);
+      fprintf(file, "\tTEQ      pc,pc\n");
+      fprintf(file, "\tLDMNEIA  r13!,{r1-r9,r14}\n");
+      fprintf(file, "\tORRNES   pc,r14,#0x10000000\n");
+      fprintf(file, "\tORR      r8,r8,#0x10000000\n");
+      fprintf(file, "\tDCD &e12ff008 ; MSR cpsr_cxsf,r8\n");
+      fprintf(file, "\tLDMIA    r13!,{r1-r9,pc}\n");
+      LABEL(_CMUNGE_swi_30);
+    }
+    fprintf(file, "\tADR\tr0,_CMUNGE_sht\n");
+    fprintf(file, "\tMOV\tr1,#0\n");
+    fprintf(file, "\tMOV\tr2,#0\n");
+    fprintf(file, "\taddr\tr4,_CMUNGE_title\n");
+    fprintf(file, "\tSWI\t0x61506 ; XMessageTrans_ErrorLookup\n");
+    if (CODE26)
+      fprintf(file, "\tLDMIA\tr13!,{r1-r9,pc}\n");
+    else
+      fprintf(file, "\tB\t_CMUNGE_swi_20\n");
+    LABEL(_CMUNGE_sht);
+    WORD(0x1e6);
+    outstring("BadSWI", 1, '\n', 0);
+    ALIGN();
+  } else {
+    /* For 64bit RISC OS, then entire 'return no such SWI' is handled by the OS */
+    // r0 = pointer to error, or 0 if no error, or -1 for No such SWI
+    fprintf(file, "\tLDP\tx29, x30, [sp], #16\n");
+    fprintf(file, "\tRET\n");
   }
-  fprintf(file, "\tADD\tr13,r13,#4\n");
-  fprintf(file, "\tCMN\tr0,#1\n");
-  if (CODE26)
-  {
-    fprintf(file, "\tLDMNEIA\tr13!,{r1-r9,r14}\n");
-    fprintf(file, "\tORRNES\tpc,r14,#0x10000000\n");
-  }
-  else
-  {
-    fprintf(file, "\tBEQ      _CMUNGE_swi_30\n");
-    LABEL(_CMUNGE_swi_20);
-    fprintf(file, "\tTEQ      pc,pc\n");
-    fprintf(file, "\tLDMNEIA  r13!,{r1-r9,r14}\n");
-    fprintf(file, "\tORRNES   pc,r14,#0x10000000\n");
-    fprintf(file, "\tORR      r8,r8,#0x10000000\n");
-    fprintf(file, "\tDCD &e12ff008 ; MSR cpsr_cxsf,r8\n");
-    fprintf(file, "\tLDMIA    r13!,{r1-r9,pc}\n");
-    LABEL(_CMUNGE_swi_30);
-  }
-  fprintf(file, "\tADR\tr0,_CMUNGE_sht\n");
-  fprintf(file, "\tMOV\tr1,#0\n");
-  fprintf(file, "\tMOV\tr2,#0\n");
-  fprintf(file, "\taddr\tr4,_CMUNGE_title\n");
-  fprintf(file, "\tSWI\t0x61506 ; XMessageTrans_ErrorLookup\n");
-  if (CODE26)
-    fprintf(file, "\tLDMIA\tr13!,{r1-r9,pc}\n");
-  else
-    fprintf(file, "\tB\t_CMUNGE_swi_20\n");
-  LABEL(_CMUNGE_sht);
-  WORD(0x1e6);
-  outstring("BadSWI", 1, '\n', 0);
-  ALIGN();
 }
 
 static void swi_decoder(void) {
 
   if (!opt.swi_decoder)
     return;
+
+  if (CODE64)
+    ErrorFatal("SWI decoder is not supported on 64bit RISC OS");
+
   LABEL(_CMUNGE_swi_decoder);
-  /* FIXME: Not supported for 64bit yet */
   if (opt.swi_decoder->handler) {
     fprintf(file, "\tSTMDB\tr13!,{r0-r3,r10,r11,r14}\n");
     fprintf(file, "\tMOV\tr10,r13,LSR #20\n");

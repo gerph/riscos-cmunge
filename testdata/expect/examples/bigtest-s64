@@ -170,62 +170,23 @@ _CMUNGE_final_10:
 	LDP	x29, x30, [sp], #16
 	RET
 _CMUNGE_swi_handler:
-	STMDB	r13!,{r0-r9,r14}
-	MRS	r8,cpsr
-	MOV	r10,r13,LSR #20
-	MOV	r10,r10,LSL #20
-	MOV	r0,r11
-	MOV	r1,r13
-	LDMIA	r10,{r4,r5}
-	MOV	r2,r12
-	LDR	r12,[r12]
-	LDMIB	r12,{r11,r12}
-	STMIA	r10,{r11,r12}
-	; This is equivalent of 'ADD r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E28AA000
-	MOV	r11,#0
-	MOV	r14,pc
-	ADD	r14,r14,# _CMUNGE_swi_ret - _CMUNGE_swi_pc
-_CMUNGE_swi_pc:
-	CMP	r0,#2
-	ADDLT	pc,pc,r0,LSL #2
-	IMPORT	Mod_SWI
-	B	Mod_SWI
-	B	Mod_SWI
-	IMPORT	SWI_Wobble
-	B	SWI_Wobble
+	STP	x29, x30, [sp, #-16]!
+	MOV	x2, x12
+	CMP	x0, #2 - 1
+	BHI	_CMUNGE_noswi_handler
+	ADR	x3, _CMUNGE_swi_dispatch
+	LDR	w4, [x3, x0, LSL #2]
+	ADD	x3, x3, w4, uxtw
+	ADR	x30, _CMUNGE_swi_ret
+	BR	x3                          // (regs, swino, pwp)
+_CMUNGE_swi_dispatch:
+.word Mod_SWI - _CMUNGE_swi_dispatch
+.word SWI_Wobble - _CMUNGE_swi_dispatch
+_CMUNGE_noswi_handler:
+	MOV	x0,#-1
 _CMUNGE_swi_ret:
-	; This is equivalent of 'SUB r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E24AA000
-	STMIA	r10,{r4,r5}
-	TEQ	r0,#0
-	BNE      _CMUNGE_swi_10
-	TEQ      pc,pc
-	LDMNEIA  r13!,{r0-r9,pc}^
-	DCD &e12ff008 ; MSR cpsr_cxsf,r8
-	LDMIA    r13!,{r0-r9,pc}
-_CMUNGE_swi_10
-	ADD	r13,r13,#4
-	CMN	r0,#1
-	BEQ      _CMUNGE_swi_30
-_CMUNGE_swi_20:
-	TEQ      pc,pc
-	LDMNEIA  r13!,{r1-r9,r14}
-	ORRNES   pc,r14,#0x10000000
-	ORR      r8,r8,#0x10000000
-	DCD &e12ff008 ; MSR cpsr_cxsf,r8
-	LDMIA    r13!,{r1-r9,pc}
-_CMUNGE_swi_30:
-	ADR	r0,_CMUNGE_sht
-	MOV	r1,#0
-	MOV	r2,#0
-	addr	r4,_CMUNGE_title
-	SWI	0x61506 ; XMessageTrans_ErrorLookup
-	B	_CMUNGE_swi_20
-_CMUNGE_sht:
-.word	0x1e6
-.asciz	"BadSWI"
-.balign	4
+	LDP	x29, x30, [sp], #16
+	RET
 	EXPORT	Event_Entry
 Event_Entry
 	TEQ	r0,#1
