@@ -6,6 +6,8 @@
 
 #define OPTIONS_H
 
+#include "apcscli.h"
+
 /* List of integers */
 
 typedef struct int_list_s *int_list;

@@ -206,9 +206,9 @@ _CMUNGE_fin
 	MOV	r10,r13,LSR #20
 	MOV	r10,r10,LSL #20
 	LDMIA	r10,{r4,r5}
-	LDR	r12,[r12,#0]
-	LDMIB	r12,{r11,r12}
-	STMIA	r10,{r11,r12}
+	LDR	r14,[r12]
+	LDMIB	r14,{r11,r14}
+	STMIA	r10,{r11,r14}
 	; This is equivalent of 'ADD r10, r10, #0' + |_Lib$Reloc$Off$DP|
 	DCD	|_Lib$Reloc$Off$DP| + &E28AA000
 	MOV	r11,#0

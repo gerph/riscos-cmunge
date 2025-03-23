@@ -90,6 +90,7 @@ _CMUNGE_ce4
 	MOV	x2,#4
 _CMUNGE_ce:
 	STP	x29, x30, [sp, #-16]!
+	MOV	x29, sp
 	STR	x0, [sp, -16]!
 	MOV	x3, x12
 	ADR	x30, _CMUNGE_com_ret
@@ -124,70 +125,50 @@ _CMUNGE_module_flags:
 .word	_zinit_size			// Size of our Zero intialised area
 
 _CMUNGE_init:
-	STMFD	r13!,{r7-r11,r14}
-	MOV	r0,#1
-	IMPORT	_clib_initialisemodule
+	STP	x29, x30, [sp, #-16]!
+	MOV	x29, sp
+	STR	x12, [sp, #-16]!
+	STP	x0, x1, [sp, #-16]!
+	MOV	x0, x12
 	BL	_clib_initialisemodule
-	LDMVSIA	r13!,{r7-r11,pc}
-	MOV	r6,r0
-	; This is equivalent of 'SUB r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E24AA000
-	LDMIA	r10,{r0,r1}
-	SUB	r10,r10,#0x14
-	LDMIA	r10,{r4,r5}
-	STMIA	r10,{r0,r1}
-	; This is equivalent of 'ADD r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E28AA000
-	MOV	r11,#0
-	IMPORT	______main
+	CMP	x0, #0
+	BNE	_CMUNGE_init_fail
 	BL	______main
-	ADD	r0,r13,#0xc
-	LDMIA	r0,{r0,r1}
-	MOV	r2,r6
-	IMPORT	Mod_Init
-	BL	Mod_Init
-	TEQ	r0,#0
-	BEQ	_CMUNGE_init_10
-	STR	r0,[r13,#-4]!
-	MOV	r0,r6
-	IMPORT	_clib_finalisemodule
+	LDP	x0, x2, [sp], #16
+	LDR	x1, [sp]
+	BL	Mod_Init                    // (tail, instance (0), pwp)
+	CMP	x0, #0
+	BEQ	_CMUNGE_init_exit
+	STR	x0, [sp, #8]                // preserve error pointer
+	LDR	x0, [sp]
 	BL	_clib_finalisemodule
-	LDR	r0,[r13],#4
-_CMUNGE_init_10
-	; This is equivalent of 'SUB r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E24AA000
-	STMIA	r10,{r4,r5}
-	CMP	r0,#0
-	MOVNE	r1,#0
-	CMPNE	r1,#1<<31
-	LDMIA	r13!,{r7-r11,pc}
+	LDR	x0, [sp, #8]
+	B	_CMUNGE_init_exit
+_CMUNGE_init_fail:
+	ADD	sp, sp, #16
+_CMUNGE_init_exit:
+	ADD	sp, sp, #16
+	LDP	x29, x30, [sp], #16
+	RET
 _CMUNGE_fin:
-	STMDB	r13!,{r7-r12,r14}
-	MOV	r10,r13,LSR #20
-	MOV	r10,r10,LSL #20
-	LDMIA	r10,{r4,r5}
-	LDR	r12,[r12,#0]
-	LDMIB	r12,{r11,r12}
-	STMIA	r10,{r11,r12}
-	; This is equivalent of 'ADD r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E28AA000
-	MOV	r11,#0
-	ADD	r0,r13,#0xc
-	LDMIA	r0,{r0-r2}
-	IMPORT	Mod_Final
+	STP	x29, x30, [sp, #-16]!
+	MOV	x29, sp
+	STR	x12, [sp, #-16]!
+	STP	x0, x1, [sp, #-16]!
+	MOV	x0, #1 // always fatal
+	MOV	x1, #0 // no podule base
+	MOV	x2, x12
 	BL	Mod_Final
-	CMP	r0,#0
+	CMP	x0,#0
 	BNE	_CMUNGE_final_10
-	LDR	r0,[r13,#0x14]
+	STR	x0, [sp, #8]                // preserve error pointer
+	LDR	x0, [sp]
 	BL	_clib_finalisemodule
-	MOVS	r0,#0
-_CMUNGE_final_10
-	; This is equivalent of 'SUB r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E24AA000
-	STMIA	r10,{r4,r5}
-	MOVNE	r1,#0
-	CMPNE	r1,#1<<31
-	LDMIA	r13!,{r7-r12,pc}
+	LDR	x0, [sp, #8]
+_CMUNGE_final_10:
+	ADD	sp, sp, #16
+	LDP	x29, x30, [sp], #16
+	RET
 _CMUNGE_swi_handler:
 	STMDB	r13!,{r0-r9,r14}
 	MRS	r8,cpsr

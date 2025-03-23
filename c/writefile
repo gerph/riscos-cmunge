@@ -32,8 +32,6 @@
 #define IF_OPTIMISED_HEADER(cond) if (1)
 #endif
 
-#define CODE64 (opt.apcs & APCS_64BIT)
-
 /* Special ways we relocate ourselves to point at our special data */
 #define ADD_Lib_Reloc \
 "\t; This is equivalent of 'ADD r10, r10, #0' + |_Lib$Reloc$Off$DP|\n\
@@ -947,12 +945,11 @@ static void service(void) {
 
 static void start(void) {
 
-  if (! CODE64) {
-  } else {
-    ErrorFatal("Start code not implemented for RISC OS 64 bit module");
+  if (!opt.runnable) {
+    return;
   }
 
-  if (opt.runnable) {
+  if (! CODE64) {
     LABEL(_CMUNGE_start);
     switch (opt.runnable)
     {
@@ -1059,6 +1056,9 @@ static void start(void) {
       default:
         ErrorFatal("Start code type confusion");
     }
+
+   } else {
+    ErrorFatal("Start code not implemented for RISC OS 64 bit module");
   }
 }
 
@@ -1259,7 +1259,7 @@ static void final(void) {
 
   LABEL(_CMUNGE_fin);
   if (! CODE64) {
-    fprintf(file, "\tSTMDB\tr13!,{r7-r11,r14}\n");
+    fprintf(file, "\tSTMDB\tr13!,{r7-r12,r14}\n");
     fprintf(file, "\tMOV\tr10,r13,LSR #20\n");
     fprintf(file, "\tMOV\tr10,r10,LSL #20\n");
     fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
@@ -1337,21 +1337,32 @@ static void final(void) {
       fprintf(file, "\tRET\n");
     }
   } else {
-    fprintf(file, "\tMOV\tr0,r12\n");
-    if (!finalise_imported)
-      fprintf(file, "\tIMPORT\t_clib_finalisemodule\n"), finalise_imported = 1;
-    fprintf(file, "\tBL\t_clib_finalisemodule\n");
-    if (opt.runnable == run_rmaapp_simple)
-      fprintf(file,"\tBLVC\t_CMUNGE_freeappstack\n");
-    if (CODE26)
-      fprintf(file, SUB_Lib_Reloc);
-    else
-      fprintf(file, SUB_Lib_Reloc_S);
-    fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
-    if (CODE26)
-      fprintf(file, "\tLDMIA\tr13!,{r7-r11,pc}^\n");
-    else
-      fprintf(file, "\tLDMIA\tr13!,{r7-r11,pc}\n");
+    if (! CODE64) {
+      fprintf(file, "\tMOV\tr0,r12\n");
+      if (!finalise_imported)
+        fprintf(file, "\tIMPORT\t_clib_finalisemodule\n"), finalise_imported = 1;
+      fprintf(file, "\tBL\t_clib_finalisemodule\n");
+      if (opt.runnable == run_rmaapp_simple)
+        fprintf(file,"\tBLVC\t_CMUNGE_freeappstack\n");
+      if (CODE26)
+        fprintf(file, SUB_Lib_Reloc);
+      else
+        fprintf(file, SUB_Lib_Reloc_S);
+      fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
+      if (CODE26)
+        fprintf(file, "\tLDMIA\tr13!,{r7-r12,pc}^\n");
+      else
+        fprintf(file, "\tLDMIA\tr13!,{r7-r12,pc}\n");
+    } else {
+      fprintf(file, "\tMOV\tx0, r12\n");
+      fprintf(file, "\tBL\t_clib_finalisemodule\n");
+      if (opt.runnable == run_rmaapp_simple)
+        ErrorFatal("rmaapp simple not supported for 64bit");
+
+      fprintf(file, "\tADD\tsp, sp, #16\n");
+      fprintf(file, "\tLDP\tx29, x30, [sp], #16\n");
+      fprintf(file, "\tRET\n");
+    }
   }
 }
 
