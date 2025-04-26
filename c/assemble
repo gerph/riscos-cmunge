@@ -32,7 +32,7 @@ void AssembleFile(void) {
     throwback = 0;
 #endif
 
-    switch (opt.toolchain)
+    switch (CODE64 ? tc_gcc : opt.toolchain)
     {
       case tc_norcroft:
         {
@@ -49,10 +49,31 @@ void AssembleFile(void) {
         break;
       case tc_gcc:
       case tc_lcc:
-        sprintf(buf, GCC_BIN_DIR "gcc -xassembler -mmodule %s %s -c %s -o %s",
-                          (CODE32) ? "-apcs32 -apcsfpv3" : "",
-                          throwback ? "-mthrowback" : "",
-                          opt.sfile, opt.ofile);
+        {
+#ifdef GCC_AS64_PATHVAR
+            char *gcc_as;
+            gcc_as = getenv(CODE64 ? GCC_AS64_PATHVAR : GCC_AS32_PATHVAR);
+            if (!gcc_as && CODE64)
+                gcc_as = "riscos64-as";
+            if (gcc_as)
+            {
+                sprintf(buf, "%s -c %s -o %s",
+                             gcc_as, opt.sfile, opt.ofile);
+            }
+#else
+            if (0)
+            {
+                /* Empty so we can use else */
+            }
+#endif
+            else
+            {
+                sprintf(buf, GCC_BIN_DIR "gcc -xassembler -mmodule %s %s -c %s -o %s",
+                             (CODE32) ? "-apcs32 -apcsfpv3" : "",
+                             throwback ? "-mthrowback" : "",
+                             opt.sfile, opt.ofile);
+            }
+        }
         break;
     }
 

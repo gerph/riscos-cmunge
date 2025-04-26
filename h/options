@@ -200,8 +200,10 @@ void Options_CheckSanityPostRead(void);
 #define NORCROFT_OBJASM "objasm"
 #define NORCROFT_CC     "cc"
 #else
-#define NORCROFT_OBJASM "riscos-objasm"
-#define NORCROFT_CC     "riscos-cc"
+#define NORCROFT_OBJASM     "riscos-objasm"
+#define NORCROFT_CC         "riscos-cc"
+#define GCC_AS64_PATHVAR    "CMUNGE_AS_AARCH32"
+#define GCC_AS32_PATHVAR    "CMUNGE_AS_AARCH64"
 #endif
 
 #endif
