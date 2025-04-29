@@ -277,10 +277,7 @@ static void outstring(const char *s,int terminate, char newline, int translate_u
         {
           fputc('"',file);
         }
-        if (! CODE64)
-        {
-          fputc('\n',file);
-        }
+        fputc('\n',file);
         inquote=0;
         chars=0;
       }
@@ -1328,7 +1325,6 @@ static void final(void) {
         fprintf(file, "\tLDMIA\tr13!,{r7-r12,pc}\n");
       }
     } else {
-      fprintf(file, "\tSTP\tx0, x1, [sp, #-16]!\n");
       fprintf(file, "\tMOV\tx0, #1 // always fatal\n");
       fprintf(file, "\tMOV\tx1, #0 // no podule base\n");
       fprintf(file, "\tMOV\tx2, x12\n");

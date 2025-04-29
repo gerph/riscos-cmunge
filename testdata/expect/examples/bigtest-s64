@@ -26,52 +26,65 @@ _CMUNGE_origin:
 .word	_CMUNGE_module_flags	-_CMUNGE_origin	// Module flags offset
 _CMUNGE_title:
 .asciz	"MimeMap"
+
 _CMUNGE_help:
 .ascii	"Mime Mappings"
 .byte	9
 .ascii	"0.10 (10 Sep 2001) "
 .byte	169
 .asciz	" Justin Fletcher (Freeware, release 5)"
+
 _CMUNGE_swi_table:
 .asciz	"MimeMap"
+
 .asciz	"Translate"
+
 .asciz	"Wobble"
+
 .byte	0
 .balign	4
 _CMUNGE_ht0:
 .asciz	"HRDMMAP:*ReadMimeMap rereads the MIME mappings file."
+
 _CMUNGE_ht1:
 .ascii	"Returns information on the file type specified."
 .byte	13
+
 _CMUNGE_is1:
 .asciz	"*MimeMap [&xxx | .ext | mime/type | Filetype]"
+
 .balign	4
 _CMUNGE_command:
 .asciz	"ReadMimeMap"
+
 .balign	4
 .word	_CMUNGE_ce0		-_CMUNGE_origin
 .word	0x10000000
 .word	0x0
 .word	_CMUNGE_ht0		-_CMUNGE_origin
 .asciz	"MimeMap"
+
 .balign	4
 .word	_CMUNGE_ce1		-_CMUNGE_origin
 .word	0x10000
 .word	_CMUNGE_is1		-_CMUNGE_origin
 .word	_CMUNGE_ht1		-_CMUNGE_origin
 .asciz	"Inet_ServiceByPort"
+
 .balign	4
 .word	_CMUNGE_ce2		-_CMUNGE_origin
 .word	0x10001
 .word	0x0
 .word	0x0
 .asciz	"Inet_ServiceByName"
+
 .balign	4
 .word	_CMUNGE_ce3		-_CMUNGE_origin
 .word	0x10001
 .word	0x0
 .word	0x0
 .asciz	"Inet_DecodeError"
+
 .balign	4
 .word	_CMUNGE_ce4		-_CMUNGE_origin
 .word	0x10001
@@ -125,6 +138,7 @@ _CMUNGE_ce_exit:
 	RET
 _CMUNGE_message_file:
 .asciz	"Resources:$.Resources.MimeMap.Messages"
+
 .balign	4
 _CMUNGE_module_flags:
 .word	0x14
@@ -160,7 +174,6 @@ _CMUNGE_fin:
 	STP	x29, x30, [sp, #-16]!
 	MOV	x29, sp
 	STR	x12, [sp, #-16]!
-	STP	x0, x1, [sp, #-16]!
 	MOV	x0, #1 // always fatal
 	MOV	x1, #0 // no podule base
 	MOV	x2, x12
@@ -481,16 +494,19 @@ _CMUNGE_genv_carry
 __err_err_Hello:
 .word	0x1247
 .asciz	"There"
+
 .balign	4
 
 .global	__err_err_Wibble
 __err_err_Wibble:
 .word	0x1248
 .asciz	"Wobble"
+
 .balign	4
 
 .global	__err_err_Thingy
 __err_err_Thingy:
 .word	0x1e6
 .asciz	"Something's up"
+
 .balign	4
