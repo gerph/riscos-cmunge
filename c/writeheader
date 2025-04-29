@@ -462,7 +462,7 @@ static void commands(void) {
 
   prototypedef_t header_proto;
   help_list l;
-  int n;
+  int n = 0;
 
   header_proto = header_text;
   header_proto.description=NULL;
