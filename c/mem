@@ -12,7 +12,7 @@ void *Malloc(int s) {
 
   v = malloc(s);
   if (v == NULL)
-    ErrorFatal("Malloc failed (%d bytes); please increase WimpSlot!");
+    ErrorFatal("Malloc failed (%d bytes); please increase WimpSlot!", s);
   return v;
 }
 
@@ -20,7 +20,7 @@ void *Realloc(void *v, int s) {
 
   v = realloc(v, s);
   if (v == NULL)
-    ErrorFatal("Realloc failed (%d bytes); please increase WimpSlot!");
+    ErrorFatal("Realloc failed (%d bytes); please increase WimpSlot!", s);
   return v;
 }
 
