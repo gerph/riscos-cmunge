@@ -474,8 +474,8 @@ static void commands(void) {
 
 /* JRF: 32bit'd */
   help_list l;
-  int n,nentry;
-  int ncommands=0;
+  int nentry;
+  int n=0;
   int info;
 
   /* FIXME: Help entries can be commands - should work; or at least mirror CHMG */
@@ -546,7 +546,6 @@ static void commands(void) {
   {
     WORD(0);
   }
-  ncommands = nentry;
   l = opt.commands;
   n = 0; nentry=0;
   while (l) {
@@ -1399,6 +1398,7 @@ static void swi_handler(void) {
     fprintf(file, "\tMOV\tr11,#0\n");
   } else {
     fprintf(file, "\tSTP\tx29, x30, [sp, #-16]!\n");
+    fprintf(file, "\tMOV\tx29, sp\n");
     fprintf(file, "\tMOV\tx2, x12\n");
   }
 
@@ -1621,6 +1621,9 @@ static void veneers(void) {
   l = opt.events;
   while (l)
   {
+    if (CODE64)
+        ErrorFatal("Event veneers are not supported in CMunge AArch64 yet"); /* FIXME */
+
     if (!first)
       fprintf(file, "\tB\t_CMUNGE_ve\n");
     fprintf(file, "\tEXPORT\t%s\n", l->name);
@@ -1660,16 +1663,23 @@ static void veneers(void) {
   while (l) {
     if (!first)
       fprintf(file, "\tB\t_CMUNGE_ve\n");
-    fprintf(file, "\tEXPORT\t%s\n", l->name);
-    fprintf(file, "%s\n", l->name);
-    fprintf(file, "\tSTMDB\tr13!,{r0-r11,r14}\n");
-    if (l->error_capable)
-    {
-      fprintf(file, "\tMOV\tr9,#%d :OR: (1<<31)\n", n);
-      any_error = 1;
+    GLOBAL_LABEL_NAMED(l->name);
+    if (! CODE64) {
+        fprintf(file, "\tSTMDB\tr13!,{r0-r11,r14}\n");
+        if (l->error_capable)
+        {
+          fprintf(file, "\tMOV\tr9,#%d :OR: (1<<31)\n", n);
+          any_error = 1;
+        }
+        else
+          fprintf(file, "\tMOV\tr9,#%d\n", n);
     }
     else
-      fprintf(file, "\tMOV\tr9,#%d\n", n);
+    {
+        fprintf(file, "\tSTP\tx29, x30, [sp, #-16]!\n");
+        fprintf(file, "\tMOV\tx29, sp\n");
+        fprintf(file, "\tMOV\tx10, #%d\n", n);
+    }
     l = l->next;
     n += 1;
     first = 0;
@@ -1677,6 +1687,8 @@ static void veneers(void) {
   /* Irqs */
   l = opt.irqs;
   while (l) {
+    if (CODE64)
+        ErrorFatal("IRQ veneers are not supported in CMunge AArch64 yet"); /* FIXME */
     if (!first)
       fprintf(file, "\tB\t_CMUNGE_ve\n");
     fprintf(file, "\tEXPORT\t%s\n", l->name);
@@ -1689,130 +1701,197 @@ static void veneers(void) {
   }
   if (n == 0)
     return;
-  fprintf(file, "_CMUNGE_ve\n");
-  fprintf(file, "\tMOV\tr0,r13\n");
-  if (CODE26)
-  {
-    fprintf(file, "\tMOV\tr6,pc\n");
-    fprintf(file, "\tBIC\tr3,r6,#3\n");
-    fprintf(file, "\tTEQP\tr3,#3\n");
+
+  LABEL(_CMUNGE_ve);
+  if (! CODE64) {
+    fprintf(file, "\tMOV\tr0,r13\n");
+  } else {
+    fprintf(file, "\tSUB\tsp, sp, #4*12\n");
+    fprintf(file, "\tSTP\tw0, w1, [sp]\n");
+    fprintf(file, "\tSTP\tw2, w3, [sp, #4*2]\n");
+    fprintf(file, "\tSTP\tw4, w5, [sp, #4*4]\n");
+    fprintf(file, "\tSTP\tw6, w7, [sp, #4*6]\n");
+    fprintf(file, "\tSTP\tw8, w9, [sp, #4*8]\n");
+    fprintf(file, "\tMOV\tx0, sp\n");
+  }
+
+  if (! CODE64) {
+      if (CODE26)
+      {
+        fprintf(file, "\tMOV\tr6,pc\n");
+        fprintf(file, "\tBIC\tr3,r6,#3\n");
+        fprintf(file, "\tTEQP\tr3,#3\n");
+      }
+      else
+      {
+        fprintf(file, "\tTEQ      pc,pc\n");
+        fprintf(file, "\tMOVNE    r8,pc\n");
+        fprintf(file, "\tORRNE    r3,r8,#3\n");
+        fprintf(file, "\tTEQNEP   r3,#0\n");
+        fprintf(file, "\tMRSEQ    r6,cpsr\n");
+        fprintf(file, "\tORREQ    r3,r6,#3\n");
+        fprintf(file, "\tMSREQ    cpsr_ctl,r3\n");
+      }
+      fprintf(file, "\tMOV\tr1,r12\n");
+      fprintf(file, "\tMOV\tr7,r14\n");
+      fprintf(file, "\tMOV\tr10,r13,LSR #20\n");
+      fprintf(file, "\tMOV\tr10,r10,LSL #20\n");
+      fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
+      fprintf(file, "\tLDR\tr12,[r12]\n");
+      fprintf(file, "\tLDMIB\tr12,{r11,r12}\n");
+      fprintf(file, "\tSTMIA\tr10,{r11,r12}\n");
+      fprintf(file, ADD_Lib_Reloc);
+      fprintf(file, "\tMOV\tr11,#0\n");
+      if (CODE26)
+      {
+        fprintf(file, "\tMOV\tr14,pc\n");
+        fprintf(file, "\tADD\tr14,r14,# _CMUNGE_vret - _CMUNGE_vpc\n");
+      }
+      else
+      {
+        fprintf(file, "\tADD\tr14,pc,# _CMUNGE_vret - _CMUNGE_vpc - 4\n");
+      }
+      fprintf(file, "_CMUNGE_vpc\n");
+      fprintf(file, "\tADD\tpc,pc,r9,LSL #2 ; notice that we lose the top bits\n");
+      fprintf(file, "\tMOV\tr0,r0\n");
   }
   else
   {
-    fprintf(file, "\tTEQ      pc,pc\n");
-    fprintf(file, "\tMOVNE    r8,pc\n");
-    fprintf(file, "\tORRNE    r3,r8,#3\n");
-    fprintf(file, "\tTEQNEP   r3,#0\n");
-    fprintf(file, "\tMRSEQ    r6,cpsr\n");
-    fprintf(file, "\tORREQ    r3,r6,#3\n");
-    fprintf(file, "\tMSREQ    cpsr_ctl,r3\n");
+      fprintf(file, "\tMOV\tx1,x12\n");
+
+      // x9 = number [| (1<<31) if error capable]
+      fprintf(file, "\tSTR\tx10, [sp, #-16]!\n");
+      fprintf(file, "\tBIC\tx10, x10, #(1<<31)\n");
+      fprintf(file, "\tADR\tx3, _CMUNGE_vector_dispatch\n");
+      fprintf(file, "\tLDR\tw4, [x3, x10, LSL #2]\n");
+      fprintf(file, "\tADD\tx3, x3, w4, uxtw\n");
+      fprintf(file, "\tADR\tlr, _CMUNGE_vret\n");
+      fprintf(file, "\tBR\tx3                          // (regs, pwp)\n");
+      LABEL(_CMUNGE_vector_dispatch);
   }
-  fprintf(file, "\tMOV\tr1,r12\n");
-  fprintf(file, "\tMOV\tr7,r14\n");
-  fprintf(file, "\tMOV\tr10,r13,LSR #20\n");
-  fprintf(file, "\tMOV\tr10,r10,LSL #20\n");
-  fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
-  fprintf(file, "\tLDR\tr12,[r12]\n");
-  fprintf(file, "\tLDMIB\tr12,{r11,r12}\n");
-  fprintf(file, "\tSTMIA\tr10,{r11,r12}\n");
-  fprintf(file, ADD_Lib_Reloc);
-  fprintf(file, "\tMOV\tr11,#0\n");
-  if (CODE26)
-  {
-    fprintf(file, "\tMOV\tr14,pc\n");
-    fprintf(file, "\tADD\tr14,r14,# _CMUNGE_vret - _CMUNGE_vpc\n");
-  }
-  else
-  {
-    fprintf(file, "\tADD\tr14,pc,# _CMUNGE_vret - _CMUNGE_vpc - 4\n");
-  }
-  fprintf(file, "_CMUNGE_vpc\n");
-  fprintf(file, "\tADD\tpc,pc,r9,LSL #2 ; notice that we lose the top bits\n");
-  fprintf(file, "\tMOV\tr0,r0\n");
 
   /* Events */
   l = opt.events;
   while (l) {
-    if (l->handler) {
-      fprintf(file, "\tIMPORT\t%s\n", l->handler);
-      fprintf(file, "\tB\t%s\n", l->handler);
+    char *name = l->handler ? l->handler : l->name;
+    char *suffix = l->handler ? "" : "_handler";
+
+    if (! CODE64) {
+      fprintf(file, "\tIMPORT\t%s%s\n", name, suffix);
+      fprintf(file, "\tB\t%s%s\n", name, suffix);
     } else {
-      fprintf(file, "\tIMPORT\t%s_handler\n", l->name);
-      fprintf(file, "\tB\t%s_handler\n", l->name);
+      fprintf(file, ".word %s%s - _CMUNGE_vector_dispatch\n", name, suffix);
     }
     l = l->next;
   }
   /* Vectors */
   l = opt.vectors;
   while (l) {
-    if (l->handler) {
-      fprintf(file, "\tIMPORT\t%s\n", l->handler);
-      fprintf(file, "\tB\t%s\n", l->handler);
+    char *name = l->handler ? l->handler : l->name;
+    char *suffix = l->handler ? "" : "_handler";
+
+    if (! CODE64) {
+      fprintf(file, "\tIMPORT\t%s%s\n", name, suffix);
+      fprintf(file, "\tB\t%s%s\n", name, suffix);
     } else {
-      fprintf(file, "\tIMPORT\t%s_handler\n", l->name);
-      fprintf(file, "\tB\t%s_handler\n", l->name);
+      fprintf(file, ".word %s%s - _CMUNGE_vector_dispatch\n", name, suffix);
     }
     l = l->next;
   }
   /* Irqs */
   l = opt.irqs;
   while (l) {
-    if (l->handler) {
-      fprintf(file, "\tIMPORT\t%s\n", l->handler);
-      fprintf(file, "\tB\t%s\n", l->handler);
+    char *name = l->handler ? l->handler : l->name;
+    char *suffix = l->handler ? "" : "_handler";
+
+    if (! CODE64) {
+      fprintf(file, "\tIMPORT\t%s%s\n", name, suffix);
+      fprintf(file, "\tB\t%s%s\n", name, suffix);
     } else {
-      fprintf(file, "\tIMPORT\t%s_handler\n", l->name);
-      fprintf(file, "\tB\t%s_handler\n", l->name);
+      fprintf(file, ".word %s%s - _CMUNGE_vector_dispatch\n", name, suffix);
     }
     l = l->next;
   }
-  fprintf(file, "_CMUNGE_vret\n");
-  fprintf(file, SUB_Lib_Reloc);
-  fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
-  fprintf(file, "\tMOV\tr14,r7\n");
-  if (CODE26)
-  {
-    fprintf(file, "\tTEQP\tr6,#0\n");
+  LABEL(_CMUNGE_vret);
+  if (! CODE64) {
+      fprintf(file, SUB_Lib_Reloc);
+      fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
+      fprintf(file, "\tMOV\tr14,r7\n");
+      if (CODE26)
+      {
+        fprintf(file, "\tTEQP\tr6,#0\n");
+      }
+      else
+      {
+        fprintf(file, "\tTEQ      pc,pc\n");
+        fprintf(file, "\tBEQ      _CMUNGE_vret_10\n");
+        fprintf(file, "\tTEQP     r8,#0\n");
+      }
   }
   else
   {
-    fprintf(file, "\tTEQ      pc,pc\n");
-    fprintf(file, "\tBEQ      _CMUNGE_vret_10\n");
-    fprintf(file, "\tTEQP     r8,#0\n");
+      fprintf(file, "\tLDR\tx9, [sp], #16\n");
   }
-  if (any_error)
-  {
-    /* r9 = has bit 31 set if :
-            r0 = 0 (claim)
-                 1 (pass on)
-                 pointer to error (claim + set v)
-            otherwise:
-            r0 = 0 (claim)
-                 other (pass on)
-     */
-    fprintf(file, "\tTST\tr9,#1<<31\n");
-    fprintf(file, "\tBEQ\t_CMUNGE_vret_26noerror\n");
+  if (! CODE64) {
+      /* Only handles the 26bit cases */
+      if (any_error)
+      {
+        /* r9 = has bit 31 set if :
+                r0 = 0 (claim)
+                     1 (pass on)
+                     pointer to error (claim + set v)
+                otherwise:
+                r0 = 0 (claim)
+                     other (pass on)
+         */
+        fprintf(file, "\tTST\tr9,#1<<31\n");
+        fprintf(file, "\tBEQ\t_CMUNGE_vret_26noerror\n");
 
-    fprintf(file, "\tCMP\tr0,#1\n");
-    fprintf(file, "\tLDMEQIA\tr13!,{r0-r11,pc}^\n");
-    fprintf(file, "\tLDMLOIA\tr13!,{r0-r11,r14,pc}^\n");
-    fprintf(file, "\tSTR\tr0,[sp]\n");
-    fprintf(file, "\tLDMIA\tr13!,{r0-r11,r14}\n");
-    fprintf(file, "\tLDR\tr14,[sp], #4\n");
-    fprintf(file, "\tORRS\tpc, r14, #1<<28 ; return with V set\n");
-    fprintf(file, "_CMUNGE_vret_26noerror\n");
+        fprintf(file, "\tCMP\tr0,#1\n");
+        fprintf(file, "\tLDMEQIA\tr13!,{r0-r11,pc}^\n");
+        fprintf(file, "\tLDMLOIA\tr13!,{r0-r11,r14,pc}^\n");
+        fprintf(file, "\tSTR\tr0,[sp]\n");
+        fprintf(file, "\tLDMIA\tr13!,{r0-r11,r14}\n");
+        fprintf(file, "\tLDR\tr14,[sp], #4\n");
+        fprintf(file, "\tORRS\tpc, r14, #1<<28 ; return with V set\n");
+        fprintf(file, "_CMUNGE_vret_26noerror\n");
+      }
+      fprintf(file, "\tTEQ\tr0,#0\n");
+      fprintf(file, "\tLDMEQIA\tr13!,{r0-r11,r14,pc}^\n");
+      fprintf(file, "\tLDMNEIA\tr13!,{r0-r11,pc}^\n");
   }
-  fprintf(file, "\tTEQ\tr0,#0\n");
-  fprintf(file, "\tLDMEQIA\tr13!,{r0-r11,r14,pc}^\n");
-  fprintf(file, "\tLDMNEIA\tr13!,{r0-r11,pc}^\n");
 
-  if (CODE26)
-  {}
-  else
-  {
-    fprintf(file, "_CMUNGE_vret_10\n");
-    if (any_error)
-    {
+  if (! CODE64) {
+      if (CODE26)
+      {}
+      else
+      {
+        fprintf(file, "_CMUNGE_vret_10\n");
+        if (any_error)
+        {
+          /* r9 = has bit 31 set if :
+                  r0 = 0 (claim)
+                       1 (pass on)
+                       pointer to error (claim + set v)
+                  otherwise:
+                  r0 = 0 (claim)
+                       other (pass on)
+           */
+          fprintf(file, "\tTST\tr9,#1<<31\n");
+          fprintf(file, "\tBICNES\tr14,r0,#1\n");
+          fprintf(file, "\tORRNE\tr6,r6,#1<<28 ; V set on returned flags\n");
+          fprintf(file, "\tSTRNE\tr0,[sp, #0]  ; R0 updated for return\n");
+          fprintf(file, "\tMOVNE\tr0,#0        ; mark as claiming\n");
+        }
+        fprintf(file, "\tMOV      r12,r6\n");
+        fprintf(file, "\tMSR      cpsr_ctl,r6\n");
+        fprintf(file, "\tTEQ      r0,#0\n");
+        fprintf(file, "\tLDMIA    r13!,{r0-r11,r14}\n");
+        fprintf(file, "\tLDREQ    r14,[r13],#4\n");
+        fprintf(file, "\tMSR      cpsr_flg,r12\n");
+        fprintf(file, "\tMOV      pc,r14\n");
+      }
+  } else {
       /* r9 = has bit 31 set if :
               r0 = 0 (claim)
                    1 (pass on)
@@ -1821,19 +1900,37 @@ static void veneers(void) {
               r0 = 0 (claim)
                    other (pass on)
        */
-      fprintf(file, "\tTST\tr9,#1<<31\n");
-      fprintf(file, "\tBICNES\tr14,r0,#1\n");
-      fprintf(file, "\tORRNE\tr6,r6,#1<<28 ; V set on returned flags\n");
-      fprintf(file, "\tSTRNE\tr0,[sp, #0]  ; R0 updated for return\n");
-      fprintf(file, "\tMOVNE\tr0,#0        ; mark as claiming\n");
-    }
-    fprintf(file, "\tMOV      r12,r6\n");
-    fprintf(file, "\tMSR      cpsr_ctl,r6\n");
-    fprintf(file, "\tTEQ      r0,#0\n");
-    fprintf(file, "\tLDMIA    r13!,{r0-r11,r14}\n");
-    fprintf(file, "\tLDREQ    r14,[r13],#4\n");
-    fprintf(file, "\tMSR      cpsr_flg,r12\n");
-    fprintf(file, "\tMOV      pc,r14\n");
+
+      /* Clear the error pointer if it wasn't capable */
+      fprintf(file, "\tTST\tx9,#1<<31\n");
+      fprintf(file, "\tCSEL\tx10, xzr, x0, eq\n"); /* x10 = x0, or 0 if not error capable */
+
+      fprintf(file, "\tCMP\tx0, #1\n");
+      fprintf(file, "\tCSEL\tx10, x10, xzr, hi\n");
+      /* x10 = error pointer, or 0 if no error */
+      /* EQ if we're passing on */
+
+      // Restore registers
+      fprintf(file, "\tLDP\tw0, w1, [sp]\n");
+      fprintf(file, "\tLDP\tw2, w3, [sp, #4*2]\n");
+      fprintf(file, "\tLDP\tw4, w5, [sp, #4*4]\n");
+      fprintf(file, "\tLDP\tw6, w7, [sp, #4*6]\n");
+      fprintf(file, "\tLDP\tw8, w9, [sp, #4*8]\n");
+      fprintf(file, "\tADD\tsp, sp, #4*12\n");
+
+      fprintf(file, "\tCMP\tx10, #0\n");
+      fprintf(file, "\tMRS\tx11, NZCV           // copy N, Z, C, and V flags into general-purpose x1\n");
+      fprintf(file, "\tBIC\tx11,x11,#0x10000000 // clear bit 28 (V)\n");
+      fprintf(file, "\tBEQ\t_CMUNGE_vclear      // v is clear\n");
+      fprintf(file, "\tORR\tx11,x11,#0x10000000 // set bit 28 (V)\n");
+      fprintf(file, "\tMOV\tx0, x10             // set the error pointer\n");
+      LABEL(_CMUNGE_vclear);
+      fprintf(file, "\tMSR\tNZCV, x11           // copy x11 back into NZCV register to update the condition flags\n");
+
+      /* FIXME: Claim not implemented - not sure quite how we do that */
+
+      fprintf(file, "\tLDP\tx29, x30, [sp], #16\n");
+      fprintf(file, "\tRET\n");
   }
 }
 
