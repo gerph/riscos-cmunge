@@ -269,6 +269,7 @@ _CMUNGE_sht
 	DCD	0x1e6
 	= "BadSWI",0
 	ALIGN
+
 	EXPORT	Event_Entry
 Event_Entry
 	TEQ	r0,#1
@@ -281,6 +282,7 @@ Event_Entry
 	STMDB	r13!,{r0-r11,r14}
 	MOV	r9,#0
 	B	_CMUNGE_ve
+
 	EXPORT	SecondEvent_Entry
 SecondEvent_Entry
 	TEQ	r0,#25
@@ -291,16 +293,19 @@ SecondEvent_Entry
 	STMDB	r13!,{r0-r11,r14}
 	MOV	r9,#1
 	B	_CMUNGE_ve
+
 	EXPORT	VectorTest
 VectorTest
 	STMDB	r13!,{r0-r11,r14}
 	MOV	r9,#2 :OR: (1<<31)
 	B	_CMUNGE_ve
+
 	EXPORT	Upcall_Entry
 Upcall_Entry
 	STMDB	r13!,{r0-r11,r14}
 	MOV	r9,#3
 	B	_CMUNGE_ve
+
 	EXPORT	CallBack_Entry
 CallBack_Entry
 	STMDB	r13!,{r0-r11,r14}

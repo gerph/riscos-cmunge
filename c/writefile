@@ -1621,41 +1621,68 @@ static void veneers(void) {
   l = opt.events;
   while (l)
   {
-    if (CODE64)
-        ErrorFatal("Event veneers are not supported in CMunge AArch64 yet"); /* FIXME */
-
     if (!first)
       fprintf(file, "\tB\t_CMUNGE_ve\n");
-    fprintf(file, "\tEXPORT\t%s\n", l->name);
-    fprintf(file, "%s\n", l->name);
+    GLOBAL_LABEL_NAMED(l->name);
     /* Output the event list */
     if (l->extradata) {
-      int firstteq;
-      il = (int_list)l->extradata;
-      firstteq = 1;
-      while (il) {
-        if (firstteq) {
-          fprintf(file, "\tTEQ\tr0,#%d\n", il->val);
-        } else {
-          fprintf(file, "\tTEQNE\tr0,#%d\n", il->val);
+        if (!CODE64)
+        {
+          int firstteq;
+          il = (int_list)l->extradata;
+          firstteq = 1;
+          while (il) {
+            if (firstteq) {
+              fprintf(file, "\tTEQ\tr0,#%d\n", il->val);
+            } else {
+              fprintf(file, "\tTEQNE\tr0,#%d\n", il->val);
+            }
+            il = il->next;
+            firstteq = 0;
+          }
+          if (CODE26)
+          {
+            fprintf(file, "\tMOVNES\tpc,r14\n");
+          }
+          else
+          {
+            fprintf(file, "\tMOVNE\tpc,r14\n");
+          }
         }
-        il = il->next;
-        firstteq = 0;
-      }
-      if (CODE26)
-      {
-        fprintf(file, "\tMOVNES\tpc,r14\n");
-      }
-      else
-      {
-        fprintf(file, "\tMOVNE\tpc,r14\n");
-      }
-      l=l->next;
+        else
+        {
+          unsigned long mask=0; /* We have a 32bit mask */
+          il = (int_list)l->extradata;
+          while (il) {
+              if (il->val > 31)
+                  ErrorFatal("CMunge does not support event numbers > 31");
+              mask = mask | (1lu << il->val);
+              il = il->next;
+          }
+          fprintf(file, "\tLDR\tx0, #31\n");
+          fprintf(file, "\tBHI\t_CMUNGE_ve_event_exit%i\n", n);
+          fprintf(file, "\tLDR\tx10, =0x%08lx\n", mask);
+          fprintf(file, "\tLSR\tx10, x10, x0\n");
+          fprintf(file, "\tTBZ\tx10, #1, _CMUNGE_ve_event%i\n", n);
+          LABEL_INDEX("_CMUNGE_ve_event_exit", n);
+          fprintf(file, "\tRET\n");
+          LABEL_INDEX("_CMUNGE_ve_event", n);
+        }
     }
-    fprintf(file, "\tSTMDB\tr13!,{r0-r11,r14}\n");
-    fprintf(file, "\tMOV\tr9,#%d\n", n);
-    n += 1;
+    if (!CODE64)
+    {
+        fprintf(file, "\tSTMDB\tr13!,{r0-r11,r14}\n");
+        fprintf(file, "\tMOV\tr9,#%d\n", n);
+    }
+    else
+    {
+        fprintf(file, "\tSTP\tx29, x30, [sp, #-16]!\n");
+        fprintf(file, "\tMOV\tx29, sp\n");
+        fprintf(file, "\tMOV\tx10,#%d\n", n);
+    }
     first = 0;
+    n += 1;
+    l = l->next;
   }
 
   /* Vectors */
@@ -1687,14 +1714,18 @@ static void veneers(void) {
   /* Irqs */
   l = opt.irqs;
   while (l) {
-    if (CODE64)
-        ErrorFatal("IRQ veneers are not supported in CMunge AArch64 yet"); /* FIXME */
     if (!first)
       fprintf(file, "\tB\t_CMUNGE_ve\n");
-    fprintf(file, "\tEXPORT\t%s\n", l->name);
-    fprintf(file, "%s\n", l->name);
-    fprintf(file, "\tSTMDB\tr13!,{r0-r11,r14}\n");
-    fprintf(file, "\tMOV\tr9,#%d\n", n);
+    GLOBAL_LABEL_NAMED(l->name);
+    if (!CODE64)
+    {
+        fprintf(file, "\tSTMDB\tr13!,{r0-r11,r14}\n");
+        fprintf(file, "\tMOV\tr9,#%d\n", n);
+    } else {
+        fprintf(file, "\tSTP\tx29, x30, [sp, #-16]!\n");
+        fprintf(file, "\tMOV\tx29, sp\n");
+        fprintf(file, "\tMOV\tx10, #%d\n", n);
+    }
     l = l->next;
     n += 1;
     first = 0;

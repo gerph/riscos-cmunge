@@ -190,6 +190,7 @@ _CMUNGE_final_10:
 	RET
 _CMUNGE_swi_handler:
 	STP	x29, x30, [sp, #-16]!
+	MOV	x29, sp
 	MOV	x2, x12
 	CMP	x0, #2 - 1
 	BHI	_CMUNGE_noswi_handler
@@ -206,110 +207,100 @@ _CMUNGE_noswi_handler:
 _CMUNGE_swi_ret:
 	LDP	x29, x30, [sp], #16
 	RET
-	EXPORT	Event_Entry
-Event_Entry
-	TEQ	r0,#1
-	TEQNE	r0,#2
-	TEQNE	r0,#3
-	TEQNE	r0,#4
-	TEQNE	r0,#5
-	TEQNE	r0,#6
-	MOVNE	pc,r14
-	STMDB	r13!,{r0-r11,r14}
-	MOV	r9,#0
+
+.global	Event_Entry
+Event_Entry:
+	LDR	x0, #31
+	BHI	_CMUNGE_ve_event_exit0
+	LDR	x10, =0x0000007e
+	LSR	x10, x10, x0
+	TBZ	x10, #1, _CMUNGE_ve_event0
+_CMUNGE_ve_event_exit0:
+	RET
+_CMUNGE_ve_event0:
+	STP	x29, x30, [sp, #-16]!
+	MOV	x29, sp
+	MOV	x10,#0
 	B	_CMUNGE_ve
-	EXPORT	SecondEvent_Entry
-SecondEvent_Entry
-	TEQ	r0,#25
-	TEQNE	r0,#22
-	TEQNE	r0,#11
-	TEQNE	r0,#7
-	MOVNE	pc,r14
-	STMDB	r13!,{r0-r11,r14}
-	MOV	r9,#1
+
+.global	SecondEvent_Entry
+SecondEvent_Entry:
+	LDR	x0, #31
+	BHI	_CMUNGE_ve_event_exit1
+	LDR	x10, =0x02400880
+	LSR	x10, x10, x0
+	TBZ	x10, #1, _CMUNGE_ve_event1
+_CMUNGE_ve_event_exit1:
+	RET
+_CMUNGE_ve_event1:
+	STP	x29, x30, [sp, #-16]!
+	MOV	x29, sp
+	MOV	x10,#1
 	B	_CMUNGE_ve
-	EXPORT	VectorTest
-VectorTest
-	STMDB	r13!,{r0-r11,r14}
-	MOV	r9,#2 :OR: (1<<31)
+
+.global	VectorTest
+VectorTest:
+	STP	x29, x30, [sp, #-16]!
+	MOV	x29, sp
+	MOV	x10, #2
 	B	_CMUNGE_ve
-	EXPORT	Upcall_Entry
-Upcall_Entry
-	STMDB	r13!,{r0-r11,r14}
-	MOV	r9,#3
+
+.global	Upcall_Entry
+Upcall_Entry:
+	STP	x29, x30, [sp, #-16]!
+	MOV	x29, sp
+	MOV	x10, #3
 	B	_CMUNGE_ve
-	EXPORT	CallBack_Entry
-CallBack_Entry
-	STMDB	r13!,{r0-r11,r14}
-	MOV	r9,#4
-_CMUNGE_ve
-	MOV	r0,r13
-	TEQ      pc,pc
-	MOVNE    r8,pc
-	ORRNE    r3,r8,#3
-	TEQNEP   r3,#0
-	MRSEQ    r6,cpsr
-	ORREQ    r3,r6,#3
-	MSREQ    cpsr_ctl,r3
-	MOV	r1,r12
-	MOV	r7,r14
-	MOV	r10,r13,LSR #20
-	MOV	r10,r10,LSL #20
-	LDMIA	r10,{r4,r5}
-	LDR	r12,[r12]
-	LDMIB	r12,{r11,r12}
-	STMIA	r10,{r11,r12}
-	; This is equivalent of 'ADD r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E28AA000
-	MOV	r11,#0
-	ADD	r14,pc,# _CMUNGE_vret - _CMUNGE_vpc - 4
-_CMUNGE_vpc
-	ADD	pc,pc,r9,LSL #2 ; notice that we lose the top bits
-	MOV	r0,r0
-	IMPORT	Event_Handler
-	B	Event_Handler
-	IMPORT	SecondEvent_Handler
-	B	SecondEvent_Handler
-	IMPORT	VectorTest_handler
-	B	VectorTest_handler
-	IMPORT	Upcall_Handler
-	B	Upcall_Handler
-	IMPORT	CallBack_Handler
-	B	CallBack_Handler
-_CMUNGE_vret
-	; This is equivalent of 'SUB r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E24AA000
-	STMIA	r10,{r4,r5}
-	MOV	r14,r7
-	TEQ      pc,pc
-	BEQ      _CMUNGE_vret_10
-	TEQP     r8,#0
-	TST	r9,#1<<31
-	BEQ	_CMUNGE_vret_26noerror
-	CMP	r0,#1
-	LDMEQIA	r13!,{r0-r11,pc}^
-	LDMLOIA	r13!,{r0-r11,r14,pc}^
-	STR	r0,[sp]
-	LDMIA	r13!,{r0-r11,r14}
-	LDR	r14,[sp], #4
-	ORRS	pc, r14, #1<<28 ; return with V set
-_CMUNGE_vret_26noerror
-	TEQ	r0,#0
-	LDMEQIA	r13!,{r0-r11,r14,pc}^
-	LDMNEIA	r13!,{r0-r11,pc}^
-_CMUNGE_vret_10
-	TST	r9,#1<<31
-	BICNES	r14,r0,#1
-	ORRNE	r6,r6,#1<<28 ; V set on returned flags
-	STRNE	r0,[sp, #0]  ; R0 updated for return
-	MOVNE	r0,#0        ; mark as claiming
-	MOV      r12,r6
-	MSR      cpsr_ctl,r6
-	TEQ      r0,#0
-	LDMIA    r13!,{r0-r11,r14}
-	LDREQ    r14,[r13],#4
-	MSR      cpsr_flg,r12
-	MOV      pc,r14
+
+.global	CallBack_Entry
+CallBack_Entry:
+	STP	x29, x30, [sp, #-16]!
+	MOV	x29, sp
+	MOV	x10, #4
+_CMUNGE_ve:
+	SUB	sp, sp, #4*12
+	STP	w0, w1, [sp]
+	STP	w2, w3, [sp, #4*2]
+	STP	w4, w5, [sp, #4*4]
+	STP	w6, w7, [sp, #4*6]
+	STP	w8, w9, [sp, #4*8]
+	MOV	x0, sp
+	MOV	x1,x12
+	STR	x10, [sp, #-16]!
+	BIC	x10, x10, #(1<<31)
+	ADR	x3, _CMUNGE_vector_dispatch
+	LDR	w4, [x3, x10, LSL #2]
+	ADD	x3, x3, w4, uxtw
+	ADR	lr, _CMUNGE_vret
+	BR	x3                          // (regs, pwp)
+_CMUNGE_vector_dispatch:
+.word Event_Handler - _CMUNGE_vector_dispatch
+.word SecondEvent_Handler - _CMUNGE_vector_dispatch
+.word VectorTest_handler - _CMUNGE_vector_dispatch
+.word Upcall_Handler - _CMUNGE_vector_dispatch
+.word CallBack_Handler - _CMUNGE_vector_dispatch
+_CMUNGE_vret:
+	LDR	x9, [sp], #16
+	TST	x9,#1<<31
+	CSEL	x10, xzr, x0, eq
+	CMP	x0, #1
+	CSEL	x10, x10, xzr, hi
+	LDP	w0, w1, [sp]
+	LDP	w2, w3, [sp, #4*2]
+	LDP	w4, w5, [sp, #4*4]
+	LDP	w6, w7, [sp, #4*6]
+	LDP	w8, w9, [sp, #4*8]
+	ADD	sp, sp, #4*12
+	CMP	x10, #0
+	MRS	x11, NZCV           // copy N, Z, C, and V flags into general-purpose x1
+	BIC	x11,x11,#0x10000000 // clear bit 28 (V)
+	BEQ	_CMUNGE_vclear      // v is clear
+	ORR	x11,x11,#0x10000000 // set bit 28 (V)
+	MOV	x0, x10             // set the error pointer
+_CMUNGE_vclear:
+	MSR	NZCV, x11           // copy x11 back into NZCV register to update the condition flags
+	LDP	x29, x30, [sp], #16
+	RET
 	EXPORT	Trap_Entry
 Trap_Entry
 	STMDB	r13!,{r0-r11,r14}
