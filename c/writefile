@@ -850,7 +850,7 @@ static void service(void) {
           fprintf(file, "\tMOVNE\tpc,r14\n");
       }
     }
-    fprintf(file, "_CMUNGE_service_fast_entry\n");
+    GLOBAL_LABEL(_CMUNGE_service_fast_entry);
     fprintf(file, "\tSTMDB\tr13!,{r0-r11,r14}\n");
     fprintf(file, "\tMOV\tr0,r1\n");
     fprintf(file, "\tMOV\tr1,r13\n");
@@ -914,7 +914,7 @@ static void service(void) {
     fprintf(file, "\tRET\n"); /* Non-indexed entry point is never used */
 
     /* 64bit fast service entry */
-    fprintf(file, "_CMUNGE_service_fast_entry\n");
+    GLOBAL_LABEL(_CMUNGE_service_fast_entry);
 
     fprintf(file, "\tSTP\tx29, x30, [sp, #-16]!\n");
     fprintf(file, "\tMOV\tx29, sp\n");
@@ -927,11 +927,11 @@ static void service(void) {
     fprintf(file, "\tSTP\tw4, w5, [sp, #4*4]\n");
     fprintf(file, "\tSTP\tw6, w7, [sp, #4*6]\n");
     fprintf(file, "\tSTP\tw8, w9, [sp, #4*8]\n");
-    fprintf(file, "\tMOV\tx1, sp\n");
 
     // x1 = service number index
-    fprintf(file, "\tADR\tx16, _CMUNGE_service_index\n");
-    fprintf(file, "\tLDR\tw0, [x16, x1, LSL #2]\n");  // Obtain the service number
+    fprintf(file, "\tADR\tx16, _CMUNGE_service_index - 4\n");
+    fprintf(file, "\tLDR\tw0, [x16, x1, LSL #2]\n");  // Obtain the service number (1-indexed)
+    fprintf(file, "\tMOV\tx1, sp\n");
 
     // Call entry point
     fprintf(file, "\tBL\t%s\n", opt.service);
