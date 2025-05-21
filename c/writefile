@@ -2372,7 +2372,7 @@ static void flags(void) {
     if (CODE64)
     {
       /* FIXME: Write out the size of zero init data */
-      fprintf(file, ".word\t_zinit_size\t\t\t%s Size of our Zero intialised area\n", COMMENT);
+      fprintf(file, ".word\t__ZISize\t\t\t%s Size of our Zero initialised area\n", COMMENT);
     }
   }
 }
