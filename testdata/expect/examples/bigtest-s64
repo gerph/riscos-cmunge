@@ -142,7 +142,7 @@ _CMUNGE_message_file:
 .balign	4
 _CMUNGE_module_flags:
 .word	0x14
-.word	_zinit_size			// Size of our Zero intialised area
+.word	__ZISize			// Size of our Zero initialised area
 
 _CMUNGE_init:
 	STP	x29, x30, [sp, #-16]!
