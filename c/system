@@ -89,7 +89,7 @@ int our_system(const char *cmdtxt)
   if (rc == 0)
   {
     char *env = getenv("Sys$ReturnCode");
-    if (!env)
+    if (env)
     {
         rc = atoi(env);
         dprintf("  extracted return code %i\n", rc);

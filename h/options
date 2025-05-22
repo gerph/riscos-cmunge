@@ -6,6 +6,8 @@
 
 #define OPTIONS_H
 
+#include "apcscli.h"
+
 /* List of integers */
 
 typedef struct int_list_s *int_list;
@@ -98,8 +100,9 @@ typedef struct defines_list_s {
 } defines_list_s;
 
 /* Shortcut checks so that it's easier to see what's happening */
+#define CODE64   (opt.apcs & APCS_64BIT)
 #define CODE32   (opt.apcs & APCS_32BIT)
-#define CODE26   (!CODE32)
+#define CODE26   ((opt.apcs & (APCS_32BIT | APCS_64BIT)) == 0)
 
 /* Main module structure */
 
@@ -197,8 +200,10 @@ void Options_CheckSanityPostRead(void);
 #define NORCROFT_OBJASM "objasm"
 #define NORCROFT_CC     "cc"
 #else
-#define NORCROFT_OBJASM "riscos-objasm"
-#define NORCROFT_CC     "riscos-cc"
+#define NORCROFT_OBJASM     "riscos-objasm"
+#define NORCROFT_CC         "riscos-cc"
+#define GCC_AS64_PATHVAR    "CMUNGE_AS_AARCH32"
+#define GCC_AS32_PATHVAR    "CMUNGE_AS_AARCH64"
 #endif
 
 #endif

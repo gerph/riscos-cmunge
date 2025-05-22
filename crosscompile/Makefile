@@ -7,7 +7,7 @@ ifneq ($(CI_BRANCH_VERSION),)
 CDEFINES += -DBUILD_VERSION=\"$(CI_BRANCH_VERSION)\"
 endif
 PLATFORM_CFLAGS ?= -fPIC
-CFLAGS = -g $(PLATFORM_CFLAGS) -funsigned-char $(INCS)
+CFLAGS = -Wall -g $(PLATFORM_CFLAGS) -funsigned-char $(INCS)
 JUNITXML ?= ../artifacts/results.xml
 
 FILES = \
