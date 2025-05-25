@@ -1360,7 +1360,7 @@ static void final(void) {
       else
         fprintf(file, "\tLDMIA\tr13!,{r7-r12,pc}\n");
     } else {
-      fprintf(file, "\tMOV\tx0, r12\n");
+      fprintf(file, "\tMOV\tx0, x12\n");
       fprintf(file, "\tBL\t_clib_finalisemodule\n");
       if (opt.runnable == run_rmaapp_simple)
         ErrorFatal("rmaapp simple not supported for 64bit");
