@@ -354,7 +354,8 @@ $label  ADR$cc.L $reg, $object\n\
   fprintf(file, "%s Now the REAL module header\n", COMMENT);
   if (! CODE64)
   {
-    fprintf(file, "\tAREA\t|!Header$$code|, CODE, READONLY%s%s\n\n",
+    fprintf(file, "\tAREA\t|!Header$$code|, %s, READONLY%s%s\n\n",
+                   (CODE26) ? "CODE" : "CODE, A32bit",
                    (opt.apcs & APCS_REENTRANT) ? ", PIC, REENTRANT" : "",
                    (opt.apcs & APCS_FPE3) ? ", FP3" : "");
   }

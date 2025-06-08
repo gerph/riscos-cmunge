@@ -41,7 +41,7 @@ $label  ADR$cc.L $reg, $object
         MEND
 
 ; Now the REAL module header
-	AREA	|!Header$$code|, CODE, READONLY
+	AREA	|!Header$$code|, CODE, A32bit, READONLY
 
 	IMPORT	|_Lib$Reloc$Off$DP|
 
