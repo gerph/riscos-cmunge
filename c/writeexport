@@ -39,8 +39,8 @@ static void hdr_swis(void) {
 
   while (l) {
     char *name=l->name;
-    int startlen,len;
-    startlen=len=strlen(prefix)+1+strlen(name)+1;
+    int len;
+    len=strlen(prefix)+1+strlen(name)+1;
     fprintf(file, "%s_%s ", prefix, name);
     while (len++<24) fputc(' ',file);
     fprintf(file, "# 1\n");
@@ -62,8 +62,8 @@ static void hdr_swis(void) {
 
   while (l) {
     char *name=l->name;
-    int startlen,len;
-    startlen=len=1+strlen(prefix)+1+strlen(name)+1;
+    int len;
+    len=1+strlen(prefix)+1+strlen(name)+1;
     fprintf(file, "X%s_%s ", prefix, name);
     while (len++<24) fputc(' ',file);
     fprintf(file, "# 1\n");
