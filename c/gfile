@@ -247,9 +247,12 @@ const char *file_getfilename(FILE *f)
 char *file_temp(void)
 {
   filelist *ptr;
+
+#if defined(WIN32) || defined(__riscos)
   char *temporary_filename = tmpnam(NULL);
   if (temporary_filename == NULL)
     return NULL;
+#endif
 
   ptr=malloc(sizeof(filelist));
   if (ptr==NULL)
@@ -265,15 +268,16 @@ char *file_temp(void)
   {
     char tempname[PATH_MAX];
     char *tmpdir = getenv("TMPDIR");
-    char *temp;
+    int fd;
 
     if (!tmpdir)
     {
         tmpdir = "/tmp";
     }
     sprintf(tempname, "%s/cmunge-XXXXXXXX", tmpdir);
-    temp = mktemp(tempname);
-    ptr->filename=strdup_strip(temp);
+    fd = mkstemp(tempname);
+    close(fd);
+    ptr->filename=strdup_strip(tempname);
   }
 #endif
 #endif
