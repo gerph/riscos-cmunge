@@ -585,7 +585,6 @@ static void commands(void) {
     fprintf(file, "\tSTR\tx0, [sp, -16]!\n");
     fprintf(file, "\tMOV\tx3, x12\n");
   }
-  /* FIXME: Not implemented for 64bit */
   if (opt.command_codesupplied)
   {
     help_list l;
@@ -602,7 +601,7 @@ static void commands(void) {
     {
         fprintf(file, "\tMOV\tr14,pc\n");
         fprintf(file, "\tADD\tr14,r14,# _CMUNGE_com_ret - _CMUNGE_com_pc\n");
-        fprintf(file, "_CMUNGE_com_pc\n");
+        LABEL(_CMUNGE_com_pc);
         fprintf(file, "\tCMP\tr2,#%i\n",numentries);
         fprintf(file, "\tADDLO\tpc,pc,r2,LSL #2\n");
         if (opt.helpfn)
@@ -616,7 +615,7 @@ static void commands(void) {
     else
     {
         fprintf(file, "\tADR\tx30, _CMUNGE_com_ret\n");
-        fprintf(file, "_CMUNGE_com_pc\n");
+        LABEL(_CMUNGE_com_pc);
         fprintf(file, "\tCMP\tx2,#%i\n",numentries);
         fprintf(file, "\tBHS\t_CMUNGE_com_outofrange\n");
         fprintf(file, "\tADR\tx4, _CMUNGE_com_dispatchtable\n");

@@ -111,7 +111,7 @@ _CMUNGE_ce:
 	STR	x0, [sp, -16]!
 	MOV	x3, x12
 	ADR	x30, _CMUNGE_com_ret
-_CMUNGE_com_pc
+_CMUNGE_com_pc:
 	CMP	x2,#5
 	BHS	_CMUNGE_com_outofrange
 	ADR	x4, _CMUNGE_com_dispatchtable
