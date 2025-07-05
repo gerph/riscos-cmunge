@@ -12,18 +12,18 @@ _rmf64_header:
 __module_header:
 _CMUNGE_origin:
 .word	0x0					// Start offset
-.word	_CMUNGE_init		-_CMUNGE_origin	// Initialisation offset
-.word	_CMUNGE_fin		-_CMUNGE_origin	// Finalisation offset
+.word	(_CMUNGE_init-_CMUNGE_origin) | 0x40000000	// Initialisation offset and architecture flag
+.word	_CMUNGE_fin-_CMUNGE_origin		// Finalisation offset
 .word	0x0					// Service handler offset
-.word	_CMUNGE_title		-_CMUNGE_origin	// Title string offset
-.word	_CMUNGE_help		-_CMUNGE_origin	// Help string offset
-.word	_CMUNGE_command		-_CMUNGE_origin	// Command table offset
+.word	_CMUNGE_title-_CMUNGE_origin		// Title string offset
+.word	_CMUNGE_help-_CMUNGE_origin		// Help string offset
+.word	_CMUNGE_command-_CMUNGE_origin		// Command table offset
 .word	0x50b00					// SWI chunk base number
-.word	_CMUNGE_swi_handler	-_CMUNGE_origin	// SWI handler offset
-.word	_CMUNGE_swi_table	-_CMUNGE_origin	// SWI table offset
+.word	_CMUNGE_swi_handler-_CMUNGE_origin	// SWI handler offset
+.word	_CMUNGE_swi_table-_CMUNGE_origin	// SWI table offset
 .word	0x0					// SWI decoding code offset
-.word	_CMUNGE_message_file	-_CMUNGE_origin	// Message file filename offset
-.word	_CMUNGE_module_flags	-_CMUNGE_origin	// Module flags offset
+.word	_CMUNGE_message_file-_CMUNGE_origin	// Message file filename offset
+.word	_CMUNGE_module_flags-_CMUNGE_origin	// Module flags offset
 _CMUNGE_title:
 .asciz	"MimeMap"
 

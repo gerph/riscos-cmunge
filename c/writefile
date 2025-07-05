@@ -99,11 +99,11 @@
     char *_tabs = _len < 8 ? "\t\t" : (_len < 16 ? "\t" : ""); \
     if (! CODE64) \
     { \
-      fprintf(file, "\tDCD\t\t%s-_CMUNGE_origin%s\t; %s\n", _label, _tabs, STRINGIFY(comment)); \
+      fprintf(file, "\tDCD\t%s-_CMUNGE_origin%s\t; %s\n", _label, _tabs, STRINGIFY(comment)); \
     } \
     else \
     { \
-      fprintf(file, ".word\t\t%s-_CMUNGE_origin%s\t// %s\n", _label, _tabs, STRINGIFY(comment)); \
+      fprintf(file, ".word\t%s-_CMUNGE_origin%s\t// %s\n", _label, _tabs, STRINGIFY(comment)); \
     } \
   } while (0)
 
@@ -114,11 +114,11 @@
     char *_tabs = _len < 8 ? "\t\t" : (_len < 16 ? "\t" : ""); \
     if (! CODE64) \
     { \
-      fprintf(file, "\tDCD\t\t(%s-_CMUNGE_origin) | 0x%08x\t%s; %s\n", _label, flags, _tabs, STRINGIFY(comment)); \
+      fprintf(file, "\tDCD\t(%s-_CMUNGE_origin) | 0x%08x\t%s; %s\n", _label, flags, _tabs, STRINGIFY(comment)); \
     } \
     else \
     { \
-      fprintf(file, ".word\t\t(%s-_CMUNGE_origin) | 0x%08x\t%s// %s\n", _label, flags, _tabs, STRINGIFY(comment)); \
+      fprintf(file, ".word\t(%s-_CMUNGE_origin) | 0x%08x\t%s// %s\n", _label, flags, _tabs, STRINGIFY(comment)); \
     } \
   } while (0)
 

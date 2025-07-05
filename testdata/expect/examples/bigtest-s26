@@ -49,17 +49,17 @@ $label  ADR$cc.L $reg, $object
 __module_header
 _CMUNGE_origin
 	DCD	0x0					; Start offset
-	DCD	_CMUNGE_init		-_CMUNGE_origin	; Initialisation offset
-	DCD	_CMUNGE_fin		-_CMUNGE_origin	; Finalisation offset
+	DCD	_CMUNGE_init-_CMUNGE_origin		; Initialisation offset
+	DCD	_CMUNGE_fin-_CMUNGE_origin		; Finalisation offset
 	DCD	0x0					; Service handler offset
-	DCD	_CMUNGE_title		-_CMUNGE_origin	; Title string offset
-	DCD	_CMUNGE_help		-_CMUNGE_origin	; Help string offset
-	DCD	_CMUNGE_command		-_CMUNGE_origin	; Command table offset
+	DCD	_CMUNGE_title-_CMUNGE_origin		; Title string offset
+	DCD	_CMUNGE_help-_CMUNGE_origin		; Help string offset
+	DCD	_CMUNGE_command-_CMUNGE_origin		; Command table offset
 	DCD	0x50b00					; SWI chunk base number
-	DCD	_CMUNGE_swi_handler	-_CMUNGE_origin	; SWI handler offset
-	DCD	_CMUNGE_swi_table	-_CMUNGE_origin	; SWI table offset
+	DCD	_CMUNGE_swi_handler-_CMUNGE_origin	; SWI handler offset
+	DCD	_CMUNGE_swi_table-_CMUNGE_origin	; SWI table offset
 	DCD	0x0					; SWI decoding code offset
-	DCD	_CMUNGE_message_file	-_CMUNGE_origin	; Message file filename offset
+	DCD	_CMUNGE_message_file-_CMUNGE_origin	; Message file filename offset
 _CMUNGE_title
 	= "MimeMap",0
 _CMUNGE_help
