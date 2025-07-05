@@ -99,11 +99,26 @@
     char *_tabs = _len < 8 ? "\t\t" : (_len < 16 ? "\t" : ""); \
     if (! CODE64) \
     { \
-      fprintf(file, "\tDCD\t%s\t%s-_CMUNGE_origin\t; %s\n", _label, _tabs, STRINGIFY(comment)); \
+      fprintf(file, "\tDCD\t\t%s-_CMUNGE_origin%s\t; %s\n", _label, _tabs, STRINGIFY(comment)); \
     } \
     else \
     { \
-      fprintf(file, ".word\t%s\t%s-_CMUNGE_origin\t// %s\n", _label, _tabs, STRINGIFY(comment)); \
+      fprintf(file, ".word\t\t%s-_CMUNGE_origin%s\t// %s\n", _label, _tabs, STRINGIFY(comment)); \
+    } \
+  } while (0)
+
+#define DCD_OFFSET_FLAGS(label, flags, comment) \
+  do { \
+    char *_label = STRINGIFY(label); \
+    int _len = strlen(_label) + 5 + 8; \
+    char *_tabs = _len < 8 ? "\t\t" : (_len < 16 ? "\t" : ""); \
+    if (! CODE64) \
+    { \
+      fprintf(file, "\tDCD\t\t(%s-_CMUNGE_origin) | 0x%08x\t%s; %s\n", _label, flags, _tabs, STRINGIFY(comment)); \
+    } \
+    else \
+    { \
+      fprintf(file, ".word\t\t(%s-_CMUNGE_origin) | 0x%08x\t%s// %s\n", _label, flags, _tabs, STRINGIFY(comment)); \
     } \
   } while (0)
 
@@ -387,7 +402,14 @@ static void mod_header(void) {
   } else {
     DCD_VALUE(0, Start offset);
   }
-  DCD_OFFSET(_CMUNGE_init, Initialisation offset);
+  if (CODE64)
+  {
+      DCD_OFFSET_FLAGS(_CMUNGE_init, (1<<30), Initialisation offset and architecture flag);
+  }
+  else
+  {
+      DCD_OFFSET(_CMUNGE_init, Initialisation offset);
+  }
   DCD_OFFSET(_CMUNGE_fin, Finalisation offset);
   if (opt.service) {
     DCD_OFFSET(_CMUNGE_service, Service handler offset);
