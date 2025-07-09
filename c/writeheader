@@ -1009,10 +1009,12 @@ static void errors(void) {
   if (opt.errors)
   {
     error_list l=opt.errors;
+    int pass;
     /* This is very icky, and nasty, and horrid, BUT it's the only way I can
        see to do it */
     fprintf(file,"\
-/* Error messages embedded in header, based at &%x */\n",errnum);
+/* Error messages embedded in the module header, based at &%x */\n",errnum);
+    /* We need to cast through an int with Norcroft, and in the GCC build through (void*), to quiet warning */
     while (l)
     {
       int num;
@@ -1023,12 +1025,27 @@ static void errors(void) {
       fprintf(file,"extern void __err_%s(void); /* &%x */\n",l->name,num);
       l = l->next;
     }
-    l=opt.errors;
-    while (l)
+    for (pass=0; pass<2; pass++)
     {
-      fprintf(file,"#define %s ((%s*)(int)__err_%s)\n",l->name,error,l->name);
-      l = l->next;
+        char *proxy_type;
+        if (pass == 0)
+        {
+          fprintf(file,"#if defined(__GNUC__)\n");
+          proxy_type = "void *";
+        }
+        else
+        {
+          fprintf(file,"#else /* Norcroft */\n");
+          proxy_type = "int";
+        }
+        l=opt.errors;
+        while (l)
+        {
+          fprintf(file,"#define %s ((%s*)(%s)__err_%s)\n",l->name,error,proxy_type,l->name);
+          l = l->next;
+        }
     }
+    fprintf(file,"#endif\n");
   }
   fprintf(file,"\n");
 }
