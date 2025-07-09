@@ -72,6 +72,20 @@
     } \
   } while (0)
 
+#define GLOBAL_LABEL_NAMED_SUFFIXED(name, suffix) \
+  do { \
+    if (! CODE64) \
+    { \
+      fprintf(file, "\n\tEXPORT\t%s%s\n", name, suffix); \
+      fprintf(file, "%s%s\n", name, suffix); \
+    } \
+    else \
+    { \
+      fprintf(file, "\n.global\t%s%s\n", name, suffix); \
+      fprintf(file, "%s%s:\n", name, suffix); \
+    } \
+  } while (0)
+
 #define LABEL(name) \
   if (! CODE64) \
   { \
@@ -80,6 +94,16 @@
   else \
   { \
     fprintf(file, "%s:\n", STRINGIFY(name)); \
+  }
+
+#define LABEL_SUFFIXED(name, suffix) \
+  if (! CODE64) \
+  { \
+    fprintf(file, "%s%s\n", STRINGIFY(name), suffix); \
+  } \
+  else \
+  { \
+    fprintf(file, "%s%s:\n", STRINGIFY(name), suffix); \
   }
 
 #define LABEL_INDEX(name, n) \
@@ -196,6 +220,13 @@
         if (! CODE64) \
             fprintf(file, "\tIMPORT\t%s\n", (funcname)); \
         fprintf(file, "\tB\t%s\n", (funcname)); \
+    } while (0)
+
+#define B_EXTERNAL_SUFFIXED(funcname, suffix) \
+    do { \
+        if (! CODE64) \
+            fprintf(file, "\tIMPORT\t%s%s\n", (funcname), (suffix)); \
+        fprintf(file, "\tB\t%s%s\n", (funcname), (suffix)); \
     } while (0)
 
 
@@ -628,8 +659,7 @@ static void commands(void) {
         fprintf(file, "\tADDLO\tpc,pc,r2,LSL #2\n");
         if (opt.helpfn)
         {
-          fprintf(file, "\tIMPORT\t%s\n", opt.helpfn);
-          fprintf(file, "\tB\t%s\n", opt.helpfn);
+            B_EXTERNAL(opt.helpfn);
         }
         else
           fprintf(file, "\tB\t_CMUNGE_nocom_handler\n");
@@ -647,7 +677,7 @@ static void commands(void) {
         LABEL(_CMUNGE_com_outofrange);
         if (opt.helpfn)
         { /* Global help handler, if we have one */
-            fprintf(file, "\tB\t%s\n", opt.helpfn);
+            B_EXTERNAL(opt.helpfn);
         }
         else
         {
@@ -665,11 +695,7 @@ static void commands(void) {
       {
         if (l->handler)
         {
-            if (! CODE64)
-            {
-                fprintf(file, "\tIMPORT\t%s\n", l->handler);
-            }
-            fprintf(file, "\tB\t%s\n", l->handler);
+            B_EXTERNAL(l->handler);
         }
         else
         {
@@ -993,15 +1019,7 @@ static void start(void) {
           else
             routine="_clib_entermodule";
 
-          if (! CODE64)
-          {
-            fprintf(file, "\tIMPORT\t%s\n",routine);
-            fprintf(file, "\tB\t%s\n",routine);
-          }
-          else
-          {
-            fprintf(file, "\tB\t%s\n",routine);
-          }
+          B_EXTERNAL(routine);
         }
         break;
 
@@ -1104,11 +1122,9 @@ static void init(void) {
     fprintf(file, "\tSTMFD\tr13!,{r7-r11,r14}\n");
     fprintf(file, "\tMOV\tr0,#%i\n",opt.reentrant ? 1 : 0);
     if (opt.lib_init) {
-      fprintf(file, "\tIMPORT\t%s\n", opt.lib_init);
-      fprintf(file, "\tBL\t%s\n", opt.lib_init);
+        BL_EXTERNAL(opt.lib_init);
     } else {
-      fprintf(file, "\tIMPORT\t_clib_initialisemodule\n");
-      fprintf(file, "\tBL\t_clib_initialisemodule\n");
+        BL_EXTERNAL("_clib_initialisemodule");
     }
   } else {
     fprintf(file, "\tSTP\tx29, x30, [sp, #-16]!\n");
@@ -1146,13 +1162,11 @@ static void init(void) {
         {
           if (opt.toolchain == tc_gcc)
           {
-            fprintf(file, "\tIMPORT\t__gccmain\n");
-            fprintf(file, "\tBL\t__gccmain\n");
+            BL_EXTERNAL("__gccmain");
           }
           else
           {
-            fprintf(file, "\tIMPORT\t______main\n");
-            fprintf(file, "\tBL\t______main\n");
+            BL_EXTERNAL("______main");
           }
         }
         if (opt.init)
@@ -1160,8 +1174,7 @@ static void init(void) {
           fprintf(file, "\tADD\tr0,r13,#0xc\n");
           fprintf(file, "\tLDMIA\tr0,{r0,r1}\n");
           fprintf(file, "\tMOV\tr2,r6\n");
-          fprintf(file, "\tIMPORT\t%s\n", opt.init);
-          fprintf(file, "\tBL\t%s\n", opt.init);
+          BL_EXTERNAL(opt.init);
           fprintf(file, "\tTEQ\tr0,#0\n");
           fprintf(file, "\tBEQ\t_CMUNGE_init_10\n");
           fprintf(file, "\tSTR\tr0,[r13,#-4]!\n");
@@ -1199,13 +1212,11 @@ static void init(void) {
         {
           if (opt.toolchain == tc_gcc)
           {
-            fprintf(file, "\tIMPORT\t__gccmain\n");
-            fprintf(file, "\tBL\t__gccmain\n");
+            BL_EXTERNAL("__gccmain");
           }
           else
           {
-            fprintf(file, "\tIMPORT\t______main\n");
-            fprintf(file, "\tBL\t______main\n");
+            BL_EXTERNAL("______main");
           }
         }
         if (opt.init)
@@ -1213,8 +1224,7 @@ static void init(void) {
           fprintf(file, "\tADD\tr0,r13,#0xc\n");
           fprintf(file, "\tLDMIA\tr0,{r0,r1}\n");
           fprintf(file, "\tMOV\tr2,r6\n");
-          fprintf(file, "\tIMPORT\t%s\n", opt.init);
-          fprintf(file, "\tBL\t%s\n", opt.init);
+          BL_EXTERNAL(opt.init);
           fprintf(file, "\tTEQ\tr0,#0\n");
           fprintf(file, "\tBEQ\t_CMUNGE_init_10\n");
           fprintf(file, "\tSTR\tr0,[r13,#-4]!\n");
@@ -1307,8 +1317,7 @@ static void final(void) {
       /* JRF: 32bit ok */
       fprintf(file, "\tADD\tr0,r13,#0xc\n");
       fprintf(file, "\tLDMIA\tr0,{r0-r2}\n");
-      fprintf(file, "\tIMPORT\t%s\n", opt.final);
-      fprintf(file, "\tBL\t%s\n", opt.final);
+      BL_EXTERNAL(opt.final);
       fprintf(file, "\tCMP\tr0,#0\n");
       if (CODE26)
       {
@@ -1443,8 +1452,7 @@ static void swi_handler(void) {
       fprintf(file, "\tADDLT\tpc,pc,r0,LSL #2\n");
       if (opt.swi_handler)
       {
-        fprintf(file, "\tIMPORT\t%s\n", opt.swi_handler);
-        fprintf(file, "\tB\t%s\n", opt.swi_handler);
+        B_EXTERNAL(opt.swi_handler);
       }
       else
       {
@@ -1496,10 +1504,7 @@ static void swi_handler(void) {
     }
     LABEL(_CMUNGE_swi_ret);
   } else {
-    if (! CODE64) {
-      fprintf(file, "\tIMPORT\t%s\n", opt.swi_handler);
-    }
-    fprintf(file, "\tBL\t%s\n", opt.swi_handler);
+    BL_EXTERNAL(opt.swi_handler);
   }
   if (! CODE64) {
     fprintf(file, SUB_Lib_Reloc);
@@ -1611,8 +1616,7 @@ static void swi_decoder(void) {
     fprintf(file, "\tSTMIA\tr10,{r11,r12}\n");
     fprintf(file, ADD_Lib_Reloc);
     fprintf(file, "\tMOV\tr11,#0\n");
-    fprintf(file, "\tIMPORT\t%s\n", opt.swi_decoder->name);
-    fprintf(file, "\tBL\t%s\n", opt.swi_decoder->name);
+    BL_EXTERNAL(opt.swi_decoder->name);
     if (CODE26)
       fprintf(file, SUB_Lib_Reloc);
     else
@@ -1812,7 +1816,7 @@ static void veneers(void) {
   {
       fprintf(file, "\tMOV\tx1,x12\n");
 
-      // x9 = number [| (1<<31) if error capable]
+      // x10 = number [| (1<<31) if error capable]
       fprintf(file, "\tSTR\tx10, [sp, #-16]!\n");
       fprintf(file, "\tBIC\tx10, x10, #(1<<31)\n");
       fprintf(file, "\tADR\tx3, _CMUNGE_vector_dispatch\n");
@@ -1830,8 +1834,7 @@ static void veneers(void) {
     char *suffix = l->handler ? "" : "_handler";
 
     if (! CODE64) {
-      fprintf(file, "\tIMPORT\t%s%s\n", name, suffix);
-      fprintf(file, "\tB\t%s%s\n", name, suffix);
+      B_EXTERNAL_SUFFIXED(name, suffix);
     } else {
       fprintf(file, ".word %s%s - _CMUNGE_vector_dispatch\n", name, suffix);
     }
@@ -1844,8 +1847,7 @@ static void veneers(void) {
     char *suffix = l->handler ? "" : "_handler";
 
     if (! CODE64) {
-      fprintf(file, "\tIMPORT\t%s%s\n", name, suffix);
-      fprintf(file, "\tB\t%s%s\n", name, suffix);
+      B_EXTERNAL_SUFFIXED(name, suffix);
     } else {
       fprintf(file, ".word %s%s - _CMUNGE_vector_dispatch\n", name, suffix);
     }
@@ -1858,8 +1860,7 @@ static void veneers(void) {
     char *suffix = l->handler ? "" : "_handler";
 
     if (! CODE64) {
-      fprintf(file, "\tIMPORT\t%s%s\n", name, suffix);
-      fprintf(file, "\tB\t%s%s\n", name, suffix);
+      B_EXTERNAL_SUFFIXED(name, suffix);
     } else {
       fprintf(file, ".word %s%s - _CMUNGE_vector_dispatch\n", name, suffix);
     }
@@ -1974,10 +1975,10 @@ static void veneers(void) {
       fprintf(file, "\tCMP\tx10, #0\n");
       fprintf(file, "\tMRS\tx11, NZCV           // copy N, Z, C, and V flags into general-purpose x1\n");
       fprintf(file, "\tBIC\tx11,x11,#0x10000000 // clear bit 28 (V)\n");
-      fprintf(file, "\tBEQ\t_CMUNGE_vclear      // v is clear\n");
+      fprintf(file, "\tBEQ\t_CMUNGE_ve_vclear   // v is clear\n");
       fprintf(file, "\tORR\tx11,x11,#0x10000000 // set bit 28 (V)\n");
       fprintf(file, "\tMOV\tx0, x10             // set the error pointer\n");
-      LABEL(_CMUNGE_vclear);
+      LABEL(_CMUNGE_ve_vclear);
       fprintf(file, "\tMSR\tNZCV, x11           // copy x11 back into NZCV register to update the condition flags\n");
 
       /* FIXME: Claim not implemented - not sure quite how we do that */
@@ -2208,16 +2209,29 @@ static void generics(void) {
 
       if (!first)
         fprintf(file, "\tB\t_CMUNGE_ge%s\n",carry_now ? "_carry" : "");
-      fprintf(file, "\tEXPORT\t%s\n", l->name);
-      fprintf(file, "%s\n", l->name);
-      fprintf(file, "\tSTMDB\tr13!,{r0-r%i,r14}\n",preserve_endreg);
+      GLOBAL_LABEL_NAMED(l->name);
+      if (! CODE64) {
+        fprintf(file, "\tSTMDB\tr13!,{r0-r%i,r14}\n",preserve_endreg);
 
-      /* If the private word appears elsewhere, use that */
-      if (l->private_word != -1 &&
-          l->private_word != 12)
-        fprintf(file, "\tMOV\tr12,r%i\n", l->private_word);
+        /* If the private word appears elsewhere, use that */
+        if (l->private_word != -1 &&
+            l->private_word != 12)
+            fprintf(file, "\tMOV\tr12,r%i\n", l->private_word);
 
-      fprintf(file, "\tMOV\tr2,#%d\n", n);
+        fprintf(file, "\tMOV\tr2,#%d\n", n);
+      } else {
+        fprintf(file, "\tSTP\tx29, x30, [sp, #-16]!\n");
+        fprintf(file, "\tMOV\tx29, sp\n");
+
+        /* If the private word appears elsewhere, use that */
+        if (l->private_word != -1 &&
+            l->private_word != 12)
+            fprintf(file, "\tMOV\tx12, x%i\n", l->private_word);
+
+        /* In the 64bit side, our entry point is stored in x10 */
+        fprintf(file, "\tMOV\tx10,#%d\n", n);
+      }
+
       n += 4;
       first = 0;
     }
@@ -2225,135 +2239,188 @@ static void generics(void) {
     if (n == 0)
       continue;
 
-    fprintf(file, "_CMUNGE_ge%s\n",carry_now ? "_carry" : "");
-    fprintf(file, "\tMOV\tr0,r13\n");
-    if (CODE26)
-    {
-      fprintf(file, "\tMOV\tr6,pc\n");
-      fprintf(file, "\tBIC\tr3,r6,#3\n");
-      fprintf(file, "\tTEQP\tr3,#3\n");
+    LABEL_SUFFIXED(_CMUNGE_ge, carry_now ? "_carry" : "");
+    if (! CODE64) {
+      fprintf(file, "\tMOV\tr0,r13\n");
     }
     else
     {
-      fprintf(file, "\tTEQ      pc,pc\n");
-      fprintf(file, "\tMOVNE    r8,pc\n");
-      fprintf(file, "\tORRNE    r3,r8,#3\n");
-      fprintf(file, "\tTEQNEP   r3,#0\n");
-      fprintf(file, "\tMRSEQ    r6,cpsr\n");
-      fprintf(file, "\tORREQ    r3,r6,#3\n");
-      fprintf(file, "\tMSREQ    cpsr_ctl,r3\n");
+      fprintf(file, "\tSUB\tsp, sp, #4*12\n");
+      fprintf(file, "\tSTP\tw0, w1, [sp]\n");
+      fprintf(file, "\tSTP\tw2, w3, [sp, #4*2]\n");
+      fprintf(file, "\tSTP\tw4, w5, [sp, #4*4]\n");
+      fprintf(file, "\tSTP\tw6, w7, [sp, #4*6]\n");
+      fprintf(file, "\tSTP\tw8, w9, [sp, #4*8]\n");
+      fprintf(file, "\tMOV\tx0, sp\n");
     }
-    fprintf(file, "\tMOV\tr1,r12\n");
-    fprintf(file, "\tMOV\tr7,r14\n");
-    fprintf(file, "\tMOV\tr10,r13,LSR #20\n");
-    fprintf(file, "\tMOV\tr10,r10,LSL #20\n");
-    fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
-    fprintf(file, "\tLDR\tr12,[r12]\n");
-    fprintf(file, "\tLDMIB\tr12,{r11,r12}\n");
-    fprintf(file, "\tSTMIA\tr10,{r11,r12}\n");
-    fprintf(file, ADD_Lib_Reloc);
-    fprintf(file, "\tMOV\tr11,#0\n");
-    if (CODE26)
-    {
-      fprintf(file, "\tMOV\tr14,pc\n");
-      fprintf(file, "\tADD\tr14,r14,#_CMUNGE_gret%s - _CMUNGE_gpc%s\n",
-                    carry_now ? "_carry" : "",
-                    carry_now ? "_carry" : "");
+
+    if (! CODE64) {
+      if (CODE26)
+      {
+        fprintf(file, "\tMOV\tr6,pc\n");
+        fprintf(file, "\tBIC\tr3,r6,#3\n");
+        fprintf(file, "\tTEQP\tr3,#3\n");
+      }
+      else
+      {
+        fprintf(file, "\tTEQ      pc,pc\n");
+        fprintf(file, "\tMOVNE    r8,pc\n");
+        fprintf(file, "\tORRNE    r3,r8,#3\n");
+        fprintf(file, "\tTEQNEP   r3,#0\n");
+        fprintf(file, "\tMRSEQ    r6,cpsr\n");
+        fprintf(file, "\tORREQ    r3,r6,#3\n");
+        fprintf(file, "\tMSREQ    cpsr_ctl,r3\n");
+      }
+      fprintf(file, "\tMOV\tr1,r12\n");
+      fprintf(file, "\tMOV\tr7,r14\n");
+      fprintf(file, "\tMOV\tr10,r13,LSR #20\n");
+      fprintf(file, "\tMOV\tr10,r10,LSL #20\n");
+      fprintf(file, "\tLDMIA\tr10,{r4,r5}\n");
+      fprintf(file, "\tLDR\tr12,[r12]\n");
+      fprintf(file, "\tLDMIB\tr12,{r11,r12}\n");
+      fprintf(file, "\tSTMIA\tr10,{r11,r12}\n");
+      fprintf(file, ADD_Lib_Reloc);
+      fprintf(file, "\tMOV\tr11,#0\n");
+      if (CODE26)
+      {
+        fprintf(file, "\tMOV\tr14,pc\n");
+        fprintf(file, "\tADD\tr14,r14,#_CMUNGE_gret%s - _CMUNGE_gpc%s\n",
+                      carry_now ? "_carry" : "",
+                      carry_now ? "_carry" : "");
+      }
+      else
+      {
+        fprintf(file, "\tADD\tr14,pc,#_CMUNGE_gret%s - _CMUNGE_gpc%s - 4\n",
+                      carry_now ? "_carry" : "",
+                      carry_now ? "_carry" : "");
+      }
+      fprintf(file, "_CMUNGE_gpc%s\n", carry_now ? "_carry" : "");
+      fprintf(file, "\tADD\tpc,pc,r2\n");
+      fprintf(file, "\tMOV\tr0,r0\n");
+    } else {
+      fprintf(file, "\tMOV\tx1,x12\n");
+
+      // x10 = number [| (1<<31) if error capable]
+      fprintf(file, "\tADR\tx3, _CMUNGE_generics_dispatch%s\n", carry_now ? "_carry" : "");
+      fprintf(file, "\tLDR\tw4, [x3, x10, LSL #2]\n");
+      fprintf(file, "\tADD\tx3, x3, w4, uxtw\n");
+      fprintf(file, "\tADR\tlr, _CMUNGE_gret%s\n", carry_now ? "_carry" : "");
+      fprintf(file, "\tBR\tx3                          // (regs, pwp)\n");
+      LABEL_SUFFIXED(_CMUNGE_generics_dispatch, carry_now ? "_carry" : "");
     }
-    else
-    {
-      fprintf(file, "\tADD\tr14,pc,#_CMUNGE_gret%s - _CMUNGE_gpc%s - 4\n",
-                    carry_now ? "_carry" : "",
-                    carry_now ? "_carry" : "");
-    }
-    fprintf(file, "_CMUNGE_gpc%s\n", carry_now ? "_carry" : "");
-    fprintf(file, "\tADD\tpc,pc,r2\n");
-    fprintf(file, "\tMOV\tr0,r0\n");
+
     for (l = opt.generics; l; l=l->next) {
       if (carry_now != l->carry_capable)
         continue;
 
-      if (l->handler) {
-        fprintf(file, "\tIMPORT\t%s\n", l->handler);
-        fprintf(file, "\tB\t%s\n", l->handler);
-      } else {
-        fprintf(file, "\tIMPORT\t%s_handler\n", l->name);
-        fprintf(file, "\tB\t%s_handler\n", l->name);
+      {
+        char *name = l->handler ? l->handler : l->name;
+        char *suffix = l->handler ? "" : "_handler";
+
+        if (! CODE64) {
+          B_EXTERNAL_SUFFIXED(name, suffix);
+        } else {
+          fprintf(file, ".word %s%s - _CMUNGE_generics_dispatch\n", name, suffix);
+        }
       }
     }
-    fprintf(file, "_CMUNGE_gret%s\n", carry_now ? "_carry" : "");
-    fprintf(file, SUB_Lib_Reloc);
-    fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
-    fprintf(file, "\tMOV\tr14,r7\n");
-    if (CODE26)
-    {
-      fprintf(file, "\tTEQP\tr6,#0\n");
-      fprintf(file, "\tTEQ\tr0,#0\n");
-      fprintf(file, "\tLDMEQIA\tr13!,{r0-r%i,pc}^\n",preserve_endreg);
-      if (carry_now)
-      {
-        fprintf(file, "\tTEQ\tr0,#2\n");
-        fprintf(file, "\tLDMEQIA\tr13!,{r0-r%i,r14}\n",preserve_endreg);
-        fprintf(file, "\tORREQS\tpc,r14,#0x20000000\n");
-        fprintf(file, "\tADD\tr13,r13,#4\n");
-        fprintf(file, "\tLDMIA\tr13!,{r1-r%i,r14}\n",preserve_endreg);
-        fprintf(file, "\tORRS\tpc,r14,#0x10000000\n");
-      }
-      else
-      {
-        fprintf(file, "\tADD\tr13,r13,#4\n");
-        fprintf(file, "\tLDMIA\tr13!,{r1-r%i,r14}\n",preserve_endreg);
-        fprintf(file, "\tORRS\tpc,r14,#0x10000000\n");
-      }
-    }
-    else
-    {
-      fprintf(file, "\tTEQ      pc,pc\n");
-      fprintf(file, "\tBEQ      _CMUNGE_genv%s ; 32bit PC\n", carry_now ? "_carry" : "");
-      fprintf(file, "\tTEQP     r8,#0\n");
-      fprintf(file, "\tTEQ      r0,#0\n");
-      fprintf(file, "\tLDMEQIA  r13!,{r0-r11,pc}^\n");
-      if (carry_now)
-      {
-        /* If r0 = 2, return CS
-              r0 = 0, has already been dealt with
-              r0 = anything else, return VS + R0 value
-              r8 = 26bit PSR on entry
-         */
-        fprintf(file, "\tTEQ\tr0,#2\n");
-        fprintf(file, "\tLDMEQIA\tr13!,{r0-r%i,r14}\n",preserve_endreg);
-        fprintf(file, "\tORREQS\tpc,r14,#0x20000000\n");
-        fprintf(file, "\tADD\tr13,r13,#4\n");
-        fprintf(file, "\tLDMIA\tr13!,{r1-r%i,r14}\n",preserve_endreg);
-        fprintf(file, "\tORRS\tpc,r14,#0x10000000\n");
-        fprintf(file, "_CMUNGE_genv_carry\n");
-        /* 32bit return for the same case as the above 26bit case, except:
-              r0 = 0 has not been dealt with
-              r6 = 32bit PSR on entry
-         */
-        fprintf(file, "\tTEQ      r0,#2\n");
-        fprintf(file, "\tORREQ    r6,r6,#0x20000000\n");
-        fprintf(file, "\tBICS     r14,r0,#2 ; NE if r0 <> 0 and r0 <> 2\n");
-        fprintf(file, "\tSTRNE    r0,[r13,#0]\n");
-        fprintf(file, "\tORRNE    r6,r6,#0x10000000\n");
-        fprintf(file, "\tMSR      cpsr_flg,r6\n");
-        fprintf(file, "\tLDMIA    r13!,{r0-r11,pc}\n");
-      }
-      else
-      {
-        fprintf(file, "\tADD\tr13,r13,#4\n");
-        fprintf(file, "\tLDMIA\tr13!,{r1-r%i,r14}\n",preserve_endreg);
-        fprintf(file, "\tORRS\tpc,r14,#0x10000000\n");
-        fprintf(file, "_CMUNGE_genv\n");
-        /* 32bit return for the same case as the above 26bit case, except:
-              r6 = 32bit PSR on entry
-         */
-        fprintf(file, "\tTEQ      r0,#0\n");
-        fprintf(file, "\tSTRNE    r0,[r13,#0]\n");
-        fprintf(file, "\tORRNE    r6,r6,#0x10000000\n");
-        fprintf(file, "\tMSR      cpsr_flg,r6\n");
-        fprintf(file, "\tLDMIA    r13!,{r0-r11,pc}\n");
-      }
+    LABEL_SUFFIXED(_CMUNGE_gret, carry_now ? "_carry" : "");
+    if (! CODE64) {
+        fprintf(file, SUB_Lib_Reloc);
+        fprintf(file, "\tSTMIA\tr10,{r4,r5}\n");
+        fprintf(file, "\tMOV\tr14,r7\n");
+        if (CODE26)
+        {
+          fprintf(file, "\tTEQP\tr6,#0\n");
+          fprintf(file, "\tTEQ\tr0,#0\n");
+          fprintf(file, "\tLDMEQIA\tr13!,{r0-r%i,pc}^\n",preserve_endreg);
+          if (carry_now)
+          {
+            fprintf(file, "\tTEQ\tr0,#2\n");
+            fprintf(file, "\tLDMEQIA\tr13!,{r0-r%i,r14}\n",preserve_endreg);
+            fprintf(file, "\tORREQS\tpc,r14,#0x20000000\n");
+            fprintf(file, "\tADD\tr13,r13,#4\n");
+            fprintf(file, "\tLDMIA\tr13!,{r1-r%i,r14}\n",preserve_endreg);
+            fprintf(file, "\tORRS\tpc,r14,#0x10000000\n");
+          }
+          else
+          {
+            fprintf(file, "\tADD\tr13,r13,#4\n");
+            fprintf(file, "\tLDMIA\tr13!,{r1-r%i,r14}\n",preserve_endreg);
+            fprintf(file, "\tORRS\tpc,r14,#0x10000000\n");
+          }
+        }
+        else
+        {
+          fprintf(file, "\tTEQ      pc,pc\n");
+          fprintf(file, "\tBEQ      _CMUNGE_genv%s ; 32bit PC\n", carry_now ? "_carry" : "");
+          fprintf(file, "\tTEQP     r8,#0\n");
+          fprintf(file, "\tTEQ      r0,#0\n");
+          fprintf(file, "\tLDMEQIA  r13!,{r0-r11,pc}^\n");
+          if (carry_now)
+          {
+            /* If r0 = 2, return CS
+                  r0 = 0, has already been dealt with
+                  r0 = anything else, return VS + R0 value
+                  r8 = 26bit PSR on entry
+             */
+            fprintf(file, "\tTEQ\tr0,#2\n");
+            fprintf(file, "\tLDMEQIA\tr13!,{r0-r%i,r14}\n",preserve_endreg);
+            fprintf(file, "\tORREQS\tpc,r14,#0x20000000\n");
+            fprintf(file, "\tADD\tr13,r13,#4\n");
+            fprintf(file, "\tLDMIA\tr13!,{r1-r%i,r14}\n",preserve_endreg);
+            fprintf(file, "\tORRS\tpc,r14,#0x10000000\n");
+            fprintf(file, "_CMUNGE_genv_carry\n");
+            /* 32bit return for the same case as the above 26bit case, except:
+                  r0 = 0 has not been dealt with
+                  r6 = 32bit PSR on entry
+             */
+            fprintf(file, "\tTEQ      r0,#2\n");
+            fprintf(file, "\tORREQ    r6,r6,#0x20000000\n");
+            fprintf(file, "\tBICS     r14,r0,#2 ; NE if r0 <> 0 and r0 <> 2\n");
+            fprintf(file, "\tSTRNE    r0,[r13,#0]\n");
+            fprintf(file, "\tORRNE    r6,r6,#0x10000000\n");
+            fprintf(file, "\tMSR      cpsr_flg,r6\n");
+            fprintf(file, "\tLDMIA    r13!,{r0-r11,pc}\n");
+          }
+          else
+          {
+            fprintf(file, "\tADD\tr13,r13,#4\n");
+            fprintf(file, "\tLDMIA\tr13!,{r1-r%i,r14}\n",preserve_endreg);
+            fprintf(file, "\tORRS\tpc,r14,#0x10000000\n");
+            fprintf(file, "_CMUNGE_genv\n");
+            /* 32bit return for the same case as the above 26bit case, except:
+                  r6 = 32bit PSR on entry
+             */
+            fprintf(file, "\tTEQ      r0,#0\n");
+            fprintf(file, "\tSTRNE    r0,[r13,#0]\n");
+            fprintf(file, "\tORRNE    r6,r6,#0x10000000\n");
+            fprintf(file, "\tMSR      cpsr_flg,r6\n");
+            fprintf(file, "\tLDMIA    r13!,{r0-r11,pc}\n");
+          }
+        }
+    } else {
+      fprintf(file, "\tMOV\tx10, x0\n"); // error pointer in x10
+
+      // Restore registers
+      fprintf(file, "\tLDP\tw0, w1, [sp]\n");
+      fprintf(file, "\tLDP\tw2, w3, [sp, #4*2]\n");
+      fprintf(file, "\tLDP\tw4, w5, [sp, #4*4]\n");
+      fprintf(file, "\tLDP\tw6, w7, [sp, #4*6]\n");
+      fprintf(file, "\tLDP\tw8, w9, [sp, #4*8]\n");
+      fprintf(file, "\tADD\tsp, sp, #4*12\n");
+
+      fprintf(file, "\tCMP\tx10, #0\n");
+      fprintf(file, "\tMRS\tx11, NZCV           // copy N, Z, C, and V flags into general-purpose x1\n");
+      fprintf(file, "\tBIC\tx11,x11,#0x10000000 // clear bit 28 (V)\n");
+      fprintf(file, "\tBEQ\t_CMUNGE_generics_vclear // v is clear\n");
+      fprintf(file, "\tORR\tx11,x11,#0x10000000 // set bit 28 (V)\n");
+      fprintf(file, "\tMOV\tx0, x10             // set the error pointer\n");
+      LABEL(_CMUNGE_generics_vclear);
+      fprintf(file, "\tMSR\tNZCV, x11           // copy x11 back into NZCV register to update the condition flags\n");
+
+      fprintf(file, "\tLDP\tx29, x30, [sp], #16\n");
+      fprintf(file, "\tRET\n");
     }
   }
 }

@@ -960,8 +960,13 @@ static void handlers(handler_list head, const char *type, rettype rtype) {
     c_comment(file, "VENEER_SETCARRY can be returned from routines which "
                     "have been marked as capable of having a carry flag "
                     "returned to return with the carry flag set. All other "
-                    "registers are preserved.");
+                    "registers are preserved. In RISC OS 64, this is not "
+                    "supported, and will return with no error.");
+    fprintf(file,"#ifdef __riscos64\n\n");
+    fprintf(file,"#define VENEER_SETCARRY ((%s *)0)\n\n", error);
+    fprintf(file,"#else\n\n");
     fprintf(file,"#define VENEER_SETCARRY ((%s *)2)\n\n", error);
+    fprintf(file,"#endif\n\n");
   }
 
   {

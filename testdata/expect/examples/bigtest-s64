@@ -294,10 +294,10 @@ _CMUNGE_vret:
 	CMP	x10, #0
 	MRS	x11, NZCV           // copy N, Z, C, and V flags into general-purpose x1
 	BIC	x11,x11,#0x10000000 // clear bit 28 (V)
-	BEQ	_CMUNGE_vclear      // v is clear
+	BEQ	_CMUNGE_ve_vclear   // v is clear
 	ORR	x11,x11,#0x10000000 // set bit 28 (V)
 	MOV	x0, x10             // set the error pointer
-_CMUNGE_vclear:
+_CMUNGE_ve_vclear:
 	MSR	NZCV, x11           // copy x11 back into NZCV register to update the condition flags
 	LDP	x29, x30, [sp], #16
 	RET
@@ -374,110 +374,87 @@ _CMUNGE_vtcall
 	STMIA	r12,{r0-r9}
 	MOVVC	r0,#0
 	LDMFD	r13!,{r4-r11,pc}
-	EXPORT	generic_entry
-generic_entry
-	STMDB	r13!,{r0-r12,r14}
-	MOV	r12,r1
-	MOV	r2,#0
-_CMUNGE_ge
-	MOV	r0,r13
-	TEQ      pc,pc
-	MOVNE    r8,pc
-	ORRNE    r3,r8,#3
-	TEQNEP   r3,#0
-	MRSEQ    r6,cpsr
-	ORREQ    r3,r6,#3
-	MSREQ    cpsr_ctl,r3
-	MOV	r1,r12
-	MOV	r7,r14
-	MOV	r10,r13,LSR #20
-	MOV	r10,r10,LSL #20
-	LDMIA	r10,{r4,r5}
-	LDR	r12,[r12]
-	LDMIB	r12,{r11,r12}
-	STMIA	r10,{r11,r12}
-	; This is equivalent of 'ADD r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E28AA000
-	MOV	r11,#0
-	ADD	r14,pc,#_CMUNGE_gret - _CMUNGE_gpc - 4
-_CMUNGE_gpc
-	ADD	pc,pc,r2
-	MOV	r0,r0
-	IMPORT	generic_handler
-	B	generic_handler
-_CMUNGE_gret
-	; This is equivalent of 'SUB r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E24AA000
-	STMIA	r10,{r4,r5}
-	MOV	r14,r7
-	TEQ      pc,pc
-	BEQ      _CMUNGE_genv ; 32bit PC
-	TEQP     r8,#0
-	TEQ      r0,#0
-	LDMEQIA  r13!,{r0-r11,pc}^
-	ADD	r13,r13,#4
-	LDMIA	r13!,{r1-r12,r14}
-	ORRS	pc,r14,#0x10000000
-_CMUNGE_genv
-	TEQ      r0,#0
-	STRNE    r0,[r13,#0]
-	ORRNE    r6,r6,#0x10000000
-	MSR      cpsr_flg,r6
-	LDMIA    r13!,{r0-r11,pc}
-	EXPORT	second_entry
-second_entry
-	STMDB	r13!,{r0-r12,r14}
-	MOV	r2,#0
-_CMUNGE_ge_carry
-	MOV	r0,r13
-	TEQ      pc,pc
-	MOVNE    r8,pc
-	ORRNE    r3,r8,#3
-	TEQNEP   r3,#0
-	MRSEQ    r6,cpsr
-	ORREQ    r3,r6,#3
-	MSREQ    cpsr_ctl,r3
-	MOV	r1,r12
-	MOV	r7,r14
-	MOV	r10,r13,LSR #20
-	MOV	r10,r10,LSL #20
-	LDMIA	r10,{r4,r5}
-	LDR	r12,[r12]
-	LDMIB	r12,{r11,r12}
-	STMIA	r10,{r11,r12}
-	; This is equivalent of 'ADD r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E28AA000
-	MOV	r11,#0
-	ADD	r14,pc,#_CMUNGE_gret_carry - _CMUNGE_gpc_carry - 4
-_CMUNGE_gpc_carry
-	ADD	pc,pc,r2
-	MOV	r0,r0
-	IMPORT	second_handler
-	B	second_handler
-_CMUNGE_gret_carry
-	; This is equivalent of 'SUB r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E24AA000
-	STMIA	r10,{r4,r5}
-	MOV	r14,r7
-	TEQ      pc,pc
-	BEQ      _CMUNGE_genv_carry ; 32bit PC
-	TEQP     r8,#0
-	TEQ      r0,#0
-	LDMEQIA  r13!,{r0-r11,pc}^
-	TEQ	r0,#2
-	LDMEQIA	r13!,{r0-r12,r14}
-	ORREQS	pc,r14,#0x20000000
-	ADD	r13,r13,#4
-	LDMIA	r13!,{r1-r12,r14}
-	ORRS	pc,r14,#0x10000000
-_CMUNGE_genv_carry
-	TEQ      r0,#2
-	ORREQ    r6,r6,#0x20000000
-	BICS     r14,r0,#2 ; NE if r0 <> 0 and r0 <> 2
-	STRNE    r0,[r13,#0]
-	ORRNE    r6,r6,#0x10000000
-	MSR      cpsr_flg,r6
-	LDMIA    r13!,{r0-r11,pc}
+
+.global	generic_entry
+generic_entry:
+	STP	x29, x30, [sp, #-16]!
+	MOV	x29, sp
+	MOV	x12, x1
+	MOV	x10,#0
+_CMUNGE_ge:
+	SUB	sp, sp, #4*12
+	STP	w0, w1, [sp]
+	STP	w2, w3, [sp, #4*2]
+	STP	w4, w5, [sp, #4*4]
+	STP	w6, w7, [sp, #4*6]
+	STP	w8, w9, [sp, #4*8]
+	MOV	x0, sp
+	MOV	x1,x12
+	ADR	x3, _CMUNGE_generics_dispatch
+	LDR	w4, [x3, x10, LSL #2]
+	ADD	x3, x3, w4, uxtw
+	ADR	lr, _CMUNGE_gret
+	BR	x3                          // (regs, pwp)
+_CMUNGE_generics_dispatch:
+.word generic_handler - _CMUNGE_generics_dispatch
+_CMUNGE_gret:
+	MOV	x10, x0
+	LDP	w0, w1, [sp]
+	LDP	w2, w3, [sp, #4*2]
+	LDP	w4, w5, [sp, #4*4]
+	LDP	w6, w7, [sp, #4*6]
+	LDP	w8, w9, [sp, #4*8]
+	ADD	sp, sp, #4*12
+	CMP	x10, #0
+	MRS	x11, NZCV           // copy N, Z, C, and V flags into general-purpose x1
+	BIC	x11,x11,#0x10000000 // clear bit 28 (V)
+	BEQ	_CMUNGE_generics_vclear // v is clear
+	ORR	x11,x11,#0x10000000 // set bit 28 (V)
+	MOV	x0, x10             // set the error pointer
+_CMUNGE_generics_vclear:
+	MSR	NZCV, x11           // copy x11 back into NZCV register to update the condition flags
+	LDP	x29, x30, [sp], #16
+	RET
+
+.global	second_entry
+second_entry:
+	STP	x29, x30, [sp, #-16]!
+	MOV	x29, sp
+	MOV	x10,#0
+_CMUNGE_ge_carry:
+	SUB	sp, sp, #4*12
+	STP	w0, w1, [sp]
+	STP	w2, w3, [sp, #4*2]
+	STP	w4, w5, [sp, #4*4]
+	STP	w6, w7, [sp, #4*6]
+	STP	w8, w9, [sp, #4*8]
+	MOV	x0, sp
+	MOV	x1,x12
+	ADR	x3, _CMUNGE_generics_dispatch_carry
+	LDR	w4, [x3, x10, LSL #2]
+	ADD	x3, x3, w4, uxtw
+	ADR	lr, _CMUNGE_gret_carry
+	BR	x3                          // (regs, pwp)
+_CMUNGE_generics_dispatch_carry:
+.word second_handler - _CMUNGE_generics_dispatch
+_CMUNGE_gret_carry:
+	MOV	x10, x0
+	LDP	w0, w1, [sp]
+	LDP	w2, w3, [sp, #4*2]
+	LDP	w4, w5, [sp, #4*4]
+	LDP	w6, w7, [sp, #4*6]
+	LDP	w8, w9, [sp, #4*8]
+	ADD	sp, sp, #4*12
+	CMP	x10, #0
+	MRS	x11, NZCV           // copy N, Z, C, and V flags into general-purpose x1
+	BIC	x11,x11,#0x10000000 // clear bit 28 (V)
+	BEQ	_CMUNGE_generics_vclear // v is clear
+	ORR	x11,x11,#0x10000000 // set bit 28 (V)
+	MOV	x0, x10             // set the error pointer
+_CMUNGE_generics_vclear:
+	MSR	NZCV, x11           // copy x11 back into NZCV register to update the condition flags
+	LDP	x29, x30, [sp], #16
+	RET
 
 // Error messages, based at &00001247
 

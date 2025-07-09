@@ -472,6 +472,7 @@ _CMUNGE_vtcall
 	STMIA	r12,{r0-r9}
 	MOVVC	r0,#0
 	LDMFD	r13!,{r4-r11,pc}
+
 	EXPORT	generic_entry
 generic_entry
 	STMDB	r13!,{r0-r12,r14}
@@ -522,6 +523,7 @@ _CMUNGE_genv
 	ORRNE    r6,r6,#0x10000000
 	MSR      cpsr_flg,r6
 	LDMIA    r13!,{r0-r11,pc}
+
 	EXPORT	second_entry
 second_entry
 	STMDB	r13!,{r0-r12,r14}

@@ -34,11 +34,28 @@ Test: Help message (short)
 Command: $TOOL -h
 
 
+Group: Specific tests
+Replace: expect/command-replacements
+Command: $TOOL -$ARG2bit -throwback cmhg.$ARG1 -s s/$ARG1
+Creates: s/$ARG1
+Expect: expect/examples/$ARG1
+Text:Matches: expect/specific/$ARG1-s$ARG2
+
+Test: Generic veneers
+Args: generics 26
+
+Test: Generic veneers
+Args: generics 32
+
+Test: Generic veneers
+Args: generics 64
+
+
 Group: Examples
 Replace: expect/command-replacements
 
 Test: Big test of many of the features
-Command: $TOOL -throwback cmhg.bigtest -s s/bigtest -o o.bigtest -p -d h/bigtest -DRobin=Genius -DNoBugsPlease -UJustin -I@.inc. -zbase -xhdr hdr/bigtest -xh h/bigtest_swis
+Command: $TOOL -throwback cmhg.$ARG1 -s s/$ARG1 -o o.$ARG1 -p -d h/$ARG1 -DRobin=Genius -DNoBugsPlease -UJustin -I@.inc. -zbase -xhdr hdr/$ARG1 -xh h/$ARG1_swis
 Creates: h/bigtest h/bigtest_swis hdr/bigtest o/bigtest s/bigtest
 Expect: expect/examples/$ARG1
 Args: bigtest

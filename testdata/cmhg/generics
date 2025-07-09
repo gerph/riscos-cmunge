@@ -1,0 +1,7 @@
+; Just testing the generics.
+
+title-string: BufferManager
+
+help-string: BufferManager 0.00
+
+generic-veneers: StartupCallback_Entry/StartupCallback_Handler
