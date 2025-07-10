@@ -58,7 +58,7 @@ _CMUNGE_origin
 _CMUNGE_title
 	= "BufferManager",0
 _CMUNGE_help
-	= "BufferManager",9,"0.00 (09 Jul 2025)",0
+	= "BufferManager",9,"0.00 (01 Sep 2001)",0
 	ALIGN
 _CMUNGE_module_flags
 	DCD	0x1
