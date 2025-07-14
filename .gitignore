@@ -1,7 +1,11 @@
 /artifacts/
 /ci-logs/
 /riscos-build/
-aif/
-aif32/
-o/
-o32/
+aif/*
+aif32/*
+aif64/*
+o/*
+o32/*
+o64/*
+testdata/h/bigtest
+testdata/h/generics
