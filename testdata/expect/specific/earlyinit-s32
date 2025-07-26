@@ -61,7 +61,7 @@ _CMUNGE_help
 	= "BufferManager",9,"0.00 (01 Sep 2001)",0
 	ALIGN
 _CMUNGE_module_flags
-	DCD	0x1
+	DCD	0x3
 
 _CMUNGE_init
 	STMFD	r13!,{r7-r11,r14}
@@ -87,56 +87,6 @@ _CMUNGE_fin
 	DCD	|_Lib$Reloc$Off$DP| + &E25AA000
 	STMIA	r10,{r4,r5}
 	LDMIA	r13!,{r7-r12,pc}
-
-	EXPORT	StartupCallback_Entry
-StartupCallback_Entry
-	STMDB	r13!,{r0-r11,r14}
-	MOV	r2,#0
-_CMUNGE_ge
-	MOV	r0,r13
-	TEQ      pc,pc
-	MOVNE    r8,pc
-	ORRNE    r3,r8,#3
-	TEQNEP   r3,#0
-	MRSEQ    r6,cpsr
-	ORREQ    r3,r6,#3
-	MSREQ    cpsr_ctl,r3
-	MOV	r1,r12
-	MOV	r7,r14
-	MOV	r10,r13,LSR #20
-	MOV	r10,r10,LSL #20
-	LDMIA	r10,{r4,r5}
-	LDR	r12,[r12]
-	LDMIB	r12,{r11,r12}
-	STMIA	r10,{r11,r12}
-	; This is equivalent of 'ADD r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E28AA000
-	MOV	r11,#0
-	ADD	r14,pc,#_CMUNGE_gret - _CMUNGE_gpc - 4
-_CMUNGE_gpc
-	ADD	pc,pc,r2
-	MOV	r0,r0
-	IMPORT	StartupCallback_Handler
-	B	StartupCallback_Handler
-_CMUNGE_gret
-	; This is equivalent of 'SUB r10, r10, #0' + |_Lib$Reloc$Off$DP|
-	DCD	|_Lib$Reloc$Off$DP| + &E24AA000
-	STMIA	r10,{r4,r5}
-	MOV	r14,r7
-	TEQ      pc,pc
-	BEQ      _CMUNGE_genv ; 32bit PC
-	TEQP     r8,#0
-	TEQ      r0,#0
-	LDMEQIA  r13!,{r0-r11,pc}^
-	ADD	r13,r13,#4
-	LDMIA	r13!,{r1-r11,r14}
-	ORRS	pc,r14,#0x10000000
-_CMUNGE_genv
-	TEQ      r0,#0
-	STRNE    r0,[r13,#0]
-	ORRNE    r6,r6,#0x10000000
-	MSR      cpsr_flg,r6
-	LDMIA    r13!,{r0-r11,pc}
 
 
 	END

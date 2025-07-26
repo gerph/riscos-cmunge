@@ -13,6 +13,12 @@ module-is-runnable:
 ; You will probably never need this field.
 module-is-not-reentrant: 
 
+; When your module must be initialised before other modules you should
+; declare this. This is only necessary for certain modules to be linked into
+; the ROM image.
+; You will probably never need this field.
+module-is-initialised-early: 
+
 ; When your module includes C++ code built using the CFront compiler, you
 ; should declare this. As part of the module initialisation sequence, the
 ; C++ global constructors will be called. Essentially this removes the

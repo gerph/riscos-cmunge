@@ -38,17 +38,29 @@ Group: Specific tests
 Replace: expect/command-replacements
 Command: $TOOL -$ARG2bit -throwback cmhg.$ARG1 -s s/$ARG1
 Creates: s/$ARG1
-Expect: expect/examples/$ARG1
+Expect: expect/examples/$ARG1$ARG3
 Text:Matches: expect/specific/$ARG1-s$ARG2
 
-Test: Generic veneers
+Test: Generic veneers (26)
 Args: generics 26
 
-Test: Generic veneers
+Test: Generic veneers (32)
 Args: generics 32
 
-Test: Generic veneers
+Test: Generic veneers (64)
 Args: generics 64
+
+Test: Early init (26)
+Args: earlyinit 26 fail
+-Creates:
+-Text:Matches:
+RC: 1
+
+Test: Early init (32)
+Args: earlyinit 32
+
+Test: Early init (64)
+Args: earlyinit 64
 
 
 Group: Examples

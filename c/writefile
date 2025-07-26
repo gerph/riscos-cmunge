@@ -2448,7 +2448,12 @@ static void trailer(void) {
 /* This function generates the module flags for 32bit modules */
 static void flags(void) {
   if (CODE26)
-  {}
+  {
+    if (opt.earlyinit)
+    {
+        ErrorFatal("Flag 'module-is-initialised-early' is not valid for 26-bit modules");
+    }
+  }
   else
   {
     unsigned long flags;
@@ -2456,6 +2461,8 @@ static void flags(void) {
       flags = 0 + (1<<2) + (1<<4); // 32bit NOT supported + zero-init present + AArch64
     else
       flags = (1<<0); // 32bit supported
+    if (opt.earlyinit)
+      flags |= (1<<1); // preinit flag (only honoured by Select 3 and later)
     LABEL(_CMUNGE_module_flags);
     WORD(flags);
     if (CODE64)

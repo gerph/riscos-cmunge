@@ -122,7 +122,8 @@ typedef struct {
     tc_gcc,
     tc_lcc
   } toolchain;
-  int           reentrant;	/* module-is-not-reentrant */
+  int           reentrant;  /* module-is-not-reentrant */
+  int           earlyinit;  /* module-is-initialised-early */
   int           cplusplus;      /* module-is-c-plus-plus */
   char         *service;	/* service-call-handler */
   int_list      services;	/* service-call-handler */

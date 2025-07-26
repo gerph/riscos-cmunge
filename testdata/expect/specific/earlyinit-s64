@@ -34,7 +34,7 @@ _CMUNGE_help:
 
 .balign	4
 _CMUNGE_module_flags:
-.word	0x14
+.word	0x16
 .word	__ZISize			// Size of our Zero initialised area
 
 _CMUNGE_init:
@@ -57,45 +57,5 @@ _CMUNGE_fin:
 	MOV	x0, x12
 	BL	_clib_finalisemodule
 	ADD	sp, sp, #16
-	LDP	x29, x30, [sp], #16
-	RET
-
-.global	StartupCallback_Entry
-StartupCallback_Entry:
-	STP	x29, x30, [sp, #-16]!
-	MOV	x29, sp
-	MOV	x10,#0
-_CMUNGE_ge:
-	SUB	sp, sp, #4*12
-	STP	w0, w1, [sp]
-	STP	w2, w3, [sp, #4*2]
-	STP	w4, w5, [sp, #4*4]
-	STP	w6, w7, [sp, #4*6]
-	STP	w8, w9, [sp, #4*8]
-	MOV	x0, sp
-	MOV	x1,x12
-	ADR	x3, _CMUNGE_generics_dispatch
-	LDR	w4, [x3, x10, LSL #2]
-	ADD	x3, x3, w4, uxtw
-	ADR	lr, _CMUNGE_gret
-	BR	x3                          // (regs, pwp)
-_CMUNGE_generics_dispatch:
-.word StartupCallback_Handler - _CMUNGE_generics_dispatch
-_CMUNGE_gret:
-	MOV	x10, x0
-	LDP	w0, w1, [sp]
-	LDP	w2, w3, [sp, #4*2]
-	LDP	w4, w5, [sp, #4*4]
-	LDP	w6, w7, [sp, #4*6]
-	LDP	w8, w9, [sp, #4*8]
-	ADD	sp, sp, #4*12
-	CMP	x10, #0
-	MRS	x11, NZCV           // copy N, Z, C, and V flags into general-purpose x1
-	BIC	x11,x11,#0x10000000 // clear bit 28 (V)
-	BEQ	_CMUNGE_generics_vclear // v is clear
-	ORR	x11,x11,#0x10000000 // set bit 28 (V)
-	MOV	x0, x10             // set the error pointer
-_CMUNGE_generics_vclear:
-	MSR	NZCV, x11           // copy x11 back into NZCV register to update the condition flags
 	LDP	x29, x30, [sp], #16
 	RET

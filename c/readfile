@@ -1194,6 +1194,15 @@ field_t fields[] =
     }, IN_CMUNGE /* I had this as IN_BOTH, but CMHG seems to fault it ? */
   },
 
+  { "module-is-initialised-early", { NULL, ft_flag_on, &opt.earlyinit },
+    { "",
+      "When your module must be initialised before other modules you "
+      "should declare this. This is only necessary for certain modules "
+      "to be linked into the ROM image.\n"
+      "You will probably never need this field."
+    }, IN_CMUNGE
+  },
+
   { "module-is-c-plus-plus",       { NULL, ft_flag_on, &opt.cplusplus },
     { "",
       "When your module includes C++ code built using the CFront compiler, "

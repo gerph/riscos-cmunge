@@ -1,0 +1,8 @@
+; Just testing the early init flag
+
+title-string: BufferManager
+
+help-string: BufferManager 0.00
+date-string: 01 Sep 2001
+
+module-is-initialised-early:
