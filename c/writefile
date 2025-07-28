@@ -2232,7 +2232,7 @@ static void generics(void) {
         fprintf(file, "\tMOV\tx10,#%d\n", n);
       }
 
-      n += 4;
+      n += 1;
       first = 0;
     }
 
