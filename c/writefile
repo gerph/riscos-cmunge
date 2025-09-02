@@ -409,7 +409,6 @@ $label  ADR$cc.L $reg, $object\n\
   {
     /* FIXME: 64bit section should include code type for the region? */
     fprintf(file, ".section .init.rmf\n\n");
-    GLOBAL_LABEL(_rmf64_header);
   }
 
   if (! CODE64)
@@ -426,6 +425,10 @@ static void mod_header(void) {
     return;
 
   GLOBAL_LABEL(__module_header);
+  if (CODE64)
+  {
+      GLOBAL_LABEL(_rmf64_header);
+  }
 
   LABEL(_CMUNGE_origin);
   if (opt.runnable) {
