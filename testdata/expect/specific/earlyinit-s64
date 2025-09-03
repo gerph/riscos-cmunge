@@ -5,11 +5,11 @@
 .section .init.rmf
 
 
-.global	_rmf64_header
-_rmf64_header:
-
 .global	__module_header
 __module_header:
+
+.global	_rmf64_header
+_rmf64_header:
 _CMUNGE_origin:
 .word	0x0					// Start offset
 .word	(_CMUNGE_init-_CMUNGE_origin) | 0x40000000	// Initialisation offset and architecture flag
