@@ -1,0 +1,5 @@
+Norcroft RISC OS ARM C vsn <VERSION>
+Compilation aborted: couldn't read file 'cmhg/errors-only'
+Pre-processor exited with code 1 unexpectedly
+CMunge <VERSION>
+Copyright (c) YYYY-YYYY Robin Watts/Justin Fletcher

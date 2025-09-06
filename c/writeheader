@@ -1008,29 +1008,27 @@ static void errors(void) {
 
   if (opt.errors)
   {
-    error_list l=opt.errors;
     int pass;
     /* This is very icky, and nasty, and horrid, BUT it's the only way I can
        see to do it */
     fprintf(file,"\
 /* Error messages embedded in the module header, based at &%x */\n",errnum);
     /* We need to cast through an int with Norcroft, and in the GCC build through (void*), to quiet warning */
-    while (l)
+    /* For 64bit, these errors are in the .rodata section, not the .text section */
+    for (pass=0; pass<3; pass++)
     {
-      int num;
-      if (l->number)
-        num=l->number;
-      else
-        num=errnum++;
-      fprintf(file,"extern void __err_%s(void); /* &%x */\n",l->name,num);
-      l = l->next;
-    }
-    for (pass=0; pass<2; pass++)
-    {
+        error_list l=opt.errors;
         char *proxy_type;
-        if (pass == 0)
+
+        if (pass == 0) /* RISCOS 64 build with GCC */
         {
-          fprintf(file,"#if defined(__GNUC__)\n");
+          fprintf(file,"#if defined(__riscos64) /* RISC OS 64bit build with GCC */\n");
+          fprintf(file,"/* Data is in the .rodata section, so is accessed directly */\n");
+          proxy_type = NULL;
+        }
+        else if (pass == 1 )
+        {
+          fprintf(file,"#elif defined(__GNUC__) /* RISC OS 32bit build with GCC */\n");
           proxy_type = "void *";
         }
         else
@@ -1038,11 +1036,31 @@ static void errors(void) {
           fprintf(file,"#else /* Norcroft */\n");
           proxy_type = "int";
         }
-        l=opt.errors;
+
+        /* Only output the prototypes once for the two forms */
         while (l)
         {
-          fprintf(file,"#define %s ((%s*)(%s)__err_%s)\n",l->name,error,proxy_type,l->name);
+          int num;
+          if (l->number)
+            num=l->number;
+          else
+            num=errnum++;
+          if (proxy_type == NULL)
+              fprintf(file,"extern _kernel_oserror *%s; /* &%x */\n",l->name,num);
+          else
+              fprintf(file,"extern void __err_%s(void); /* &%x */\n",l->name,num);
           l = l->next;
+        }
+        fprintf(file,"\n");
+
+        if (proxy_type)
+        {
+            l=opt.errors;
+            while (l)
+            {
+              fprintf(file,"#define %s ((%s*)(%s)__err_%s)\n",l->name,error,proxy_type,l->name);
+              l = l->next;
+            }
         }
     }
     fprintf(file,"#endif\n");

@@ -579,6 +579,11 @@ _CMUNGE_genv_carry
 	MSR      cpsr_flg,r6
 	LDMIA    r13!,{r0-r11,pc}
 
+
+; Error definitions
+	AREA	|!Header$$code2|, CODE, A32bit, READONLY
+
+
 ; Error messages, based at &00001247
 
 	EXPORT	__err_err_Hello

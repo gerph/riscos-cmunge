@@ -498,6 +498,11 @@ _CMUNGE_gret_carry
 	LDMIA	r13!,{r1-r12,r14}
 	ORRS	pc,r14,#0x10000000
 
+
+; Error definitions
+	AREA	|!Header$$code2|, CODE, READONLY
+
+
 ; Error messages, based at &00001247
 
 	EXPORT	__err_err_Hello

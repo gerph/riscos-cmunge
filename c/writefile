@@ -397,6 +397,10 @@ $label  ADR$cc.L $reg, $object\n\
 ");
   }
 
+  /* Jump out if we're only outputting the errors */
+  if (opt.mode_errors)
+    return;
+
   fprintf(file, "%s Now the REAL module header\n", COMMENT);
   if (! CODE64)
   {
@@ -407,8 +411,7 @@ $label  ADR$cc.L $reg, $object\n\
   }
   else
   {
-    /* FIXME: 64bit section should include code type for the region? */
-    fprintf(file, ".section .init.rmf\n\n");
+    fprintf(file, ".section .init.rmf, \"xa\", @progbits\n\n");
   }
 
   if (! CODE64)
@@ -793,6 +796,9 @@ static void service(void) {
   int big;
   int first;
 
+  if (opt.mode_errors)
+    return;
+
   if (!opt.service)
     return;
   if (! CODE64) {
@@ -1002,6 +1008,9 @@ static void service(void) {
 }
 
 static void start(void) {
+
+  if (opt.mode_errors)
+    return;
 
   if (!opt.runnable) {
     return;
@@ -1408,6 +1417,9 @@ static void final(void) {
 
 static void swi_handler(void) {
 
+  if (opt.mode_errors)
+    return;
+
   /* JRF: 32bit ok */
   if (!opt.swi_base)
     return;
@@ -1566,6 +1578,9 @@ static void swi_handler(void) {
 
 static void swi_decoder(void) {
 
+  if (opt.mode_errors)
+    return;
+
   if (!opt.swi_decoder)
     return;
 
@@ -1639,6 +1654,9 @@ static void veneers(void) {
   int first;
   handler_list l;
   int_list il;
+
+  if (opt.mode_errors)
+    return;
 
   first = 1;
   n = 0;
@@ -1998,6 +2016,9 @@ static void vector_traps(void) {
   int first;
   handler_list l;
 
+  if (opt.mode_errors)
+    return;
+
   first = 1;
   n = 0;
   /* Vector traps */
@@ -2156,15 +2177,37 @@ static void errors(void) {
 
   int error=opt.error_base;
   error_list l=opt.errors;
+  char *prefix;
 
   if (opt.errors==NULL)
     return;
 
+  fprintf(file, "\n\n%s Error definitions\n", COMMENT);
+  if (! CODE64)
+  {
+    /* Still needs to be flagged as CODE because it isn't copyable */
+    fprintf(file, "\tAREA\t|!Header$$code2|, %s, READONLY%s%s\n\n",
+                   (CODE26) ? "CODE" : "CODE, A32bit",
+                   (opt.apcs & APCS_REENTRANT) ? ", PIC, REENTRANT" : "",
+                   (opt.apcs & APCS_FPE3) ? ", FP3" : "");
+  }
+  else
+  {
+    /* In 64bit builds we can just put this in the .rodata section, as
+     * there is no problem with this data being copied.
+     */
+    fprintf(file, ".section .rodata\n\n");
+  }
+
   fprintf(file,"\n%s Error messages, based at &%08x\n", COMMENT, error);
+  if (CODE64)
+    prefix = "";
+  else
+    prefix = "__err_";
   while (l)
   {
     char name[256];
-    sprintf(name, "__err_%s",l->name);
+    sprintf(name, "%s%s", prefix, l->name);
     GLOBAL_LABEL_NAMED(name);
     if (l->number)
       WORD(l->number);
@@ -2189,6 +2232,9 @@ static void generics(void) {
   /* 0 if we're not doing the carry_capable handlers,
      1 if we're doing the carry_capable handlers */
   int carry_now;
+
+  if (opt.mode_errors)
+    return;
 
   /* Check if we use any specific registers */
   l = opt.generics;
@@ -2453,6 +2499,10 @@ static void trailer(void) {
 
 /* This function generates the module flags for 32bit modules */
 static void flags(void) {
+
+  if (opt.mode_errors)
+    return;
+
   if (CODE26)
   {
     if (opt.earlyinit)
@@ -2489,7 +2539,8 @@ void WriteFile(void) {
   mod_header();
   strings(); /* Afterwards, PC can end on a non word boundary */
   swi_table(); /* Afterwards, PC could end on a non word boundary */
-  ALIGN();
+  if (!opt.mode_errors)
+      ALIGN();
   /* From here onwards, PC is always word aligned */
   commands();
 #ifdef CMHG_RESOURCE_FILE_ORDERING

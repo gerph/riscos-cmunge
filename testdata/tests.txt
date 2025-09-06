@@ -94,6 +94,21 @@ Text:Replace: expect/output-replacements
 Args: bigtest
 
 
+Group: Option: -zerrors
+Replace: expect/command-replacements
+
+Test: Only errors (32bit)
+Command: $TOOL -32bit -throwback cmhg.errors-only -zerrors -s s/errors-only-32 -p
+Creates: s/errors-only-32
+Expect: expect/examples/errors-only-32
+
+Test: Only errors (64bit)
+Command: $TOOL -64bit -throwback cmhg.errors-only -zerrors -s s/errors-only-64 -p
+Creates: s/errors-only-64
+Expect: expect/examples/errors-only-64
+
+
+
 Group: Blank
 Replace: expect/command-replacements
 Text:Matches: expect/examples/$ARG1-cmhg

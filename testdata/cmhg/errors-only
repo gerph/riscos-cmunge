@@ -1,0 +1,7 @@
+;
+; Just some errors definitions
+;
+
+error-base:		&1240 + 7
+error-identifiers:	err_Hello("There"),err_Wibble("Wobble"),
+      			err_Thingy(&1e6,"Something's up")
