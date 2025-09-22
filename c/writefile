@@ -2408,7 +2408,7 @@ static void generics(void) {
           fprintf(file, "\tBEQ      _CMUNGE_genv%s ; 32bit PC\n", carry_now ? "_carry" : "");
           fprintf(file, "\tTEQP     r8,#0\n");
           fprintf(file, "\tTEQ      r0,#0\n");
-          fprintf(file, "\tLDMEQIA  r13!,{r0-r11,pc}^\n");
+          fprintf(file, "\tLDMEQIA  r13!,{r0-r%i,pc}^\n",preserve_endreg);
           if (carry_now)
           {
             /* If r0 = 2, return CS
@@ -2433,7 +2433,7 @@ static void generics(void) {
             fprintf(file, "\tSTRNE    r0,[r13,#0]\n");
             fprintf(file, "\tORRNE    r6,r6,#0x10000000\n");
             fprintf(file, "\tMSR      cpsr_flg,r6\n");
-            fprintf(file, "\tLDMIA    r13!,{r0-r11,pc}\n");
+            fprintf(file, "\tLDMIA    r13!,{r0-r%i,pc}\n",preserve_endreg);
           }
           else
           {
@@ -2448,7 +2448,7 @@ static void generics(void) {
             fprintf(file, "\tSTRNE    r0,[r13,#0]\n");
             fprintf(file, "\tORRNE    r6,r6,#0x10000000\n");
             fprintf(file, "\tMSR      cpsr_flg,r6\n");
-            fprintf(file, "\tLDMIA    r13!,{r0-r11,pc}\n");
+            fprintf(file, "\tLDMIA    r13!,{r0-r%i,pc}\n",preserve_endreg);
           }
         }
     } else {
