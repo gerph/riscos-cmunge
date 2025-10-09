@@ -101,7 +101,7 @@ library, and checks the array parameters for read/write access.
 	
 	void	MemCheck_CheckMallocHeap( void);
 /*
-Checks whether the malloc heap is consistant. This is called whenever
+Checks whether the malloc heap is consistent. This is called whenever
 malloc, realloc and free is called, so you won't usually need to call it
 yourself.
  */
@@ -177,7 +177,7 @@ Also see MemCheck_SetReadQuitting, MemCheck_SetQuitting.
 /*
 Sets whether to terminate program after a read or write error has been
 detected. Initially, quitwrite is 1, quitread is 0 (ie program is
-quitted only after a write error).
+exited only after a write error).
 
 This simply calls MemCheck_SetReadQuitting and
 MemCheck_SetWriteQuitting.
@@ -322,7 +322,7 @@ block.
 
 yesno=1 - store function nesting.
 
-yesno=0 - don't store functio nesting.
+yesno=0 - don't store function nesting.
 
 Initially, function-nesting is /not/ stored.
  */

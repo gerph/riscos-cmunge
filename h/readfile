@@ -45,7 +45,7 @@ typedef struct {
 
   struct {
     char *value;     /* The default value to give it, or NULL to comment it */
-    char *comment;   /* The comment to preceed it */
+    char *comment;   /* The comment to precede it */
     fieldblank_f func; /* Function to call for additional blank output */
   } blank;
   int hgtype;        /* Which header generator it is in */
@@ -66,8 +66,8 @@ typedef struct {
   } values;
 
   struct {
-    char *value;     /* The default vaue to give it, or NULL to comment it */
-    char *comment;   /* The comment to preceed it */
+    char *value;     /* The default value to give it, or NULL to comment it */
+    char *comment;   /* The comment to precede it */
   } blank;
   int hgtype;        /* Which header generator it is in */
 } cmdfield_t;

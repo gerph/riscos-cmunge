@@ -1,0 +1,6 @@
+[codespell]
+skip = *ffc,*ff8,*.pyc,*.png,*.gif,.DS_Store,*.table,*.icns,*.ico
+quiet-level = 3
+ignore-words-list = ThirdParty,podule,clen
+# Comment marker for SublimeText
+#directories = c h

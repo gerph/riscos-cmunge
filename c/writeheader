@@ -542,7 +542,7 @@ static void swi_handler(void) {
         "pw",
         "private word for module" },
     },
-    "Return NULL if SWI handled sucessfully, setting return register "
+    "Return NULL if SWI handled successfully, setting return register "
     "values (r0-r9) in r.\n"
     "Return error_BAD_SWI for out of range SWIs.\n"
     "Return an error block for a custom error."

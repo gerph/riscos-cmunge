@@ -5,7 +5,7 @@
 #ifndef SYSTEM_H
 #define SYSTEM_H
 
-/* This function is here to provide escaping for the invoked comand when used
+/* This function is here to provide escaping for the invoked command when used
    under linux. Under RISC OS we can happily invoke the command directly
    without any problems.
 

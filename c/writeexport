@@ -108,7 +108,7 @@ static void h_swis(void) {
 }
 
 /* we output an assembler hdr file sometimes, so that we don't have
-   to worry about anything nasty like inconsistant constructs; the only
+   to worry about anything nasty like inconsistent constructs; the only
    important ones here really are the SWI numbers which it is very useful
    to have in an exported hdr file */
 void WriteExport_Hdr(void) {

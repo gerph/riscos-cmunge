@@ -95,7 +95,7 @@ static void uninsert(void) {
 
 /****************************************************************************
  * This nightmare function is a line parser for CMHG files. Its horrible, but
- * blame Acorn for the wierd rules CMHG set for when reading should continue
+ * blame Acorn for the weird rules CMHG set for when reading should continue
  * onto the next line, when commas are required etc...
  ***************************************************************************/
 
@@ -629,13 +629,13 @@ cmdfield_t cmdfields[] = {
   { "configure",     { NULL, ft_flag_on, &skeletoncmd.configure },
     { "",
       "The command is used for *Status and *Configure commands only. "
-      "This is equivilent to the 'status' field."
+      "This is equivalent to the 'status' field."
     }, IN_BOTH
   },
   { "status",        { NULL, ft_flag_on, &skeletoncmd.status },
     { "",
       "The command is used for *Status and *Configure commands only. "
-      "This is equivilent to the 'configure' field."
+      "This is equivalent to the 'configure' field."
     }, IN_BOTH
   },
 
@@ -766,7 +766,7 @@ static void read_commands(const char *s, FILE *file) {
 
       if (field->values.func)
       { /* We have a function for special processing of this field, so we
-           have to call it to deal with the more complex trailling data */
+           have to call it to deal with the more complex trailing data */
         int *value=(int *)field->values.value;
         if (field->values.type==ft_check)
         { /* They've asked us to check dupe declarations, so we'd better */
@@ -1119,7 +1119,7 @@ static void read_runnable(const char *s, FILE *file)
        Which requires :
         1 An entry sequence similar to that provided here.
         2 A list of all stacks must be maintained for freeing on exit.
-        3 Handlers must be aware of the existance of multiple RMA stacks
+        3 Handlers must be aware of the existence of multiple RMA stacks
           which are unrelated to one another but freeable at the instance
           of their calls.
         4 C contexts can be copied from the base area, with the actual state
@@ -1174,7 +1174,7 @@ static void read_runnable(const char *s, FILE *file)
     * All ft_alias entries will be ignored.
     * Fields will be used IN ORDER
     * Comments will be word wrapped by the blank generation code
-    * End your sentances with a .
+    * End your sentences with a .
 */
 
 field_t fields[] =
@@ -1497,7 +1497,7 @@ static void parse_line(FILE *file) {
 
     if (field->values.func)
     { /* We have a function for special processing of this field, so we
-         have to call it to deal with the more complex trailling data */
+         have to call it to deal with the more complex trailing data */
       int *value=(int *)field->values.value;
       if (field->values.type==ft_check)
       { /* They've asked us to check dupe declarations, so we'd better */
@@ -1746,7 +1746,7 @@ void ReadFile(void) {
 #ifndef __riscos
             /* If we're not on RISC OS then a RISC OS name won't be valid
                and we will need the actual unix name to be able to check
-               the file's existance. Because we specify no extension list,
+               the file's existence. Because we specify no extension list,
                we just get the filename conventions changed, with no
                extension swapping.
              */

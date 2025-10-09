@@ -4,7 +4,7 @@
  * Author:   Justin Fletcher
  * Date:     29 Dec 2003
  * Note:     This header (and the companion source) is able to be built
- *           and used independantly from the rest of CMunge. It is used
+ *           and used independently from the rest of CMunge. It is used
  *           within other tools and as such these fails should not depend
  *           on other features of the CMunge source if possible.
  ******************************************************************/

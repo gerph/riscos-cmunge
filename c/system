@@ -20,7 +20,7 @@
 
 /* This function is here for two reasons ...
 
-   1. To provide escaping for the invoked comand when used under linux.
+   1. To provide escaping for the invoked command when used under linux.
       Under RISC OS we can happily invoke the command directly without any
       problems (except as mentioned in 2.)
 
