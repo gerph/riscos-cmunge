@@ -195,10 +195,10 @@ event-handler: Event_Entry/Event_Handler 1 2 3 4 5 6
 ;     the text supplied in the 'help-text' field.
 ;   configure: 
 ;     The command is used for *Status and *Configure commands only. This is
-;     equivilent to the 'status' field.
+;     equivalent to the 'status' field.
 ;   status: 
 ;     The command is used for *Status and *Configure commands only. This is
-;     equivilent to the 'configure' field.
+;     equivalent to the 'configure' field.
 ;   help: 
 ;     The command handler will be called to process help requests.
 ;   invalid-syntax: <string>
