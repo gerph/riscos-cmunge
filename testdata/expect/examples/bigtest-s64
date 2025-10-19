@@ -463,22 +463,22 @@ _CMUNGE_generics_vclear:
 
 // Error messages, based at &00001247
 
-.global	err_Hello
-err_Hello:
+.global	__err_err_Hello
+__err_err_Hello:
 .word	0x1247
 .asciz	"There"
 
 .balign	4
 
-.global	err_Wibble
-err_Wibble:
+.global	__err_err_Wibble
+__err_err_Wibble:
 .word	0x1248
 .asciz	"Wobble"
 
 .balign	4
 
-.global	err_Thingy
-err_Thingy:
+.global	__err_err_Thingy
+__err_err_Thingy:
 .word	0x1e6
 .asciz	"Something's up"
 

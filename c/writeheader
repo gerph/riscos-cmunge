@@ -1046,21 +1046,25 @@ static void errors(void) {
           else
             num=errnum++;
           if (proxy_type == NULL)
-              fprintf(file,"extern _kernel_oserror *%s; /* &%x */\n",l->name,num);
+              fprintf(file,"extern _kernel_oserror __err_%s; /* &%x */\n",l->name,num);
           else
               fprintf(file,"extern void __err_%s(void); /* &%x */\n",l->name,num);
           l = l->next;
         }
         fprintf(file,"\n");
 
-        if (proxy_type)
+        l=opt.errors;
+        while (l)
         {
-            l=opt.errors;
-            while (l)
+            if (proxy_type == NULL)
             {
-              fprintf(file,"#define %s ((%s*)(%s)__err_%s)\n",l->name,error,proxy_type,l->name);
-              l = l->next;
+                fprintf(file,"#define %s (&__err_%s)\n",l->name,l->name);
             }
+            else
+            {
+                fprintf(file,"#define %s ((%s*)(%s)__err_%s)\n",l->name,error,proxy_type,l->name);
+            }
+          l = l->next;
         }
     }
     fprintf(file,"#endif\n");

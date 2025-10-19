@@ -2200,10 +2200,7 @@ static void errors(void) {
   }
 
   fprintf(file,"\n%s Error messages, based at &%08x\n", COMMENT, error);
-  if (CODE64)
-    prefix = "";
-  else
-    prefix = "__err_";
+  prefix = "__err_";
   while (l)
   {
     char name[256];
