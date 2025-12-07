@@ -84,6 +84,8 @@ int our_system(const char *cmdtxt)
      line clearing and which functions correctly on all known SCL versions.
      (Fault reported by Alex Waugh)
    */
+  fflush(stdout);
+  fflush(stderr);
   rc = _kernel_system(cmd, 0);
   dprintf("  got return code %i\n", rc);
   if (rc == 0)
@@ -137,6 +139,8 @@ int our_system(const char *cmdtxt)
     }
   }
   dprintf("Starting command '%s'\n", cmd);
+  fflush(stdout);
+  fflush(stderr);
   rc = system(cmd);
   dprintf("Returned %i\n", rc);
   if (rc != -1)
