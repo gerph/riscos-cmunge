@@ -1,6 +1,6 @@
 COMPONENT = riscos-cmunge
 CC = gcc
-LIBS = $(RO_NATIVE)/CLX/clx.a
+#LIBS = $(RO_NATIVE)/CLX/clx.a
 INCS = -I$(RO_NATIVE)/CLX/
 CDEFINES =
 ifneq ($(CI_BRANCH_VERSION),)
