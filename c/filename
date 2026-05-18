@@ -139,6 +139,23 @@ static char *riscos_to_unix(const char *src)
   char c;
   dprintf("riscos_to_unix('%s')",src);
 
+#ifndef __riscos
+  if (src[0] == '@')
+  {
+    *dest++ = '.';
+    src++;
+    if (src[0] == '.')
+    {
+#ifdef WIN32
+        *dest++ = '\\';
+#else
+        *dest++ = '/';
+#endif
+        src++;
+    }
+  }
+#endif
+
   while ((c=*src++)!='\0')
   {
     if (c=='.')

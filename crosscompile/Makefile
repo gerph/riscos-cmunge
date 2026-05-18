@@ -1,7 +1,7 @@
 COMPONENT = riscos-cmunge
 CC = gcc
 #LIBS = $(RO_NATIVE)/CLX/clx.a
-INCS = -I$(RO_NATIVE)/CLX/
+#INCS = -I$(RO_NATIVE)/CLX/
 CDEFINES =
 ifneq ($(CI_BRANCH_VERSION),)
 CDEFINES += -DBUILD_VERSION=\"$(CI_BRANCH_VERSION)\"
@@ -9,6 +9,9 @@ endif
 PLATFORM_CFLAGS ?= -fPIC
 CFLAGS = -Wall -g $(PLATFORM_CFLAGS) -funsigned-char $(INCS)
 JUNITXML ?= ../artifacts/results.xml
+
+# Any more arguments to pass to the tool (largely so we can use -tgcc)
+EXTRA_ARGS ?=
 
 FILES = \
 	apcscli.c apcscli.h assemble.c assemble.h \
@@ -69,7 +72,7 @@ test: $(COMPONENT)
 	mkdir -p ../testdata/hdr
 	mkdir -p ../testdata/s
 	mkdir -p ../artifacts
-	perl ../testdata/test.pl --junitxml "${JUNITXML}" --show-command --show-output $(shell pwd)/$(COMPONENT) ../testdata
+	perl ../testdata/test.pl --junitxml "${JUNITXML}" --show-command --show-output "$(shell pwd)/$(COMPONENT) ${EXTRA_ARGS}" ../testdata
 
 clean:
 	-rm -f *.c *.h VersionNum *.o $(COMPONENT)

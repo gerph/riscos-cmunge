@@ -1664,7 +1664,24 @@ void ReadFile(void) {
     }
     includes = opt.includes;
     while (includes) {
+#ifndef __riscos
+      switch (opt.toolchain)
+      {
+        case tc_gcc:
+            {
+                /* Try to include as both the RISC OS and unix version */
+                bufend += sprintf(bufend, " -I%s", includes->path);
+                bufend += sprintf(bufend, " -I%s", filename_riscostounix(includes->path, EXTLIST_NORCROFT_CMHG));
+            }
+            break;
+
+        default:
+            bufend += sprintf(bufend, " -I%s", includes->path);
+      }
+#else
       bufend += sprintf(bufend, " -I%s", includes->path);
+#endif
+
       includes = includes->next;
     }
 
@@ -1703,7 +1720,41 @@ void ReadFile(void) {
     switch (opt.toolchain)
     {
       case tc_gcc:
+#ifndef __riscos
+        {
+            /* GCC on non-RISC OS will need the filename in host format,
+               even if they gave it as RISC OS format. */
+            const char *nativefilename = opt.infile;
+            const char *altfilename;
+            FILE *f;
+            /* We need to identify whether the input file is valid or not;
+               Norcroft CC does not understand (for example) file.cmhg as
+               meaning cmhg.file. As such, we need to convert from the
+               Unix-named convention to the actual file. */
+            f = fopen(opt.infile, "r");
+            if (f)
+            {
+              fclose(f);
+              nativefilename = opt.infile;
+            }
+            else
+            {
+                altfilename = filename_riscostounix(opt.infile, NULL);
+                f = fopen(altfilename, "r");
+                if (f)
+                {
+                  fclose(f);
+                  nativefilename = altfilename;
+                }
+            }
+
+            /* GCC on RISC OS takes RISC OS filenames or unix filenames */
+            bufend += sprintf(bufend, " -I. %s -o %s", nativefilename, opt.pfile);
+        }
+#else
+        /* GCC on RISC OS takes RISC OS filenames or unix filenames */
         bufend += sprintf(bufend, " %s -o %s", opt.infile, opt.pfile);
+#endif
         break;
       case tc_norcroft:
         if (opt.dfile)
