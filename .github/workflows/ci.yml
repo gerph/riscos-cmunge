@@ -189,8 +189,8 @@ jobs:
           leafname="$COMPONENT_NAME-macOS-$version.zip"
           if [ -f crosscompile/riscos-cmunge ] ; then
               mkdir macos-output
-              cp crosscompile/riscos-cmunge "macos-output/CMunge"
-              cd macos-output && zip -9 "../$leafname" CMunge
+              cp crosscompile/riscos-cmunge "macos-output/riscos-cmunge"
+              cd macos-output && zip -9 "../$leafname" riscos-cmunge
           else
               echo "No macOS binary was built?"
               exit 1
@@ -274,11 +274,15 @@ jobs:
         with:
           name: CMunge-macOS
 
+      - name: Check what we downloaded
+        run: |
+          ls -alR
+
       - name: Create Release
         id: create_release
         uses: ncipollo/release-action@v1
         with:
           prerelease: false
           draft: true
-          artifacts: "${{ needs.build-riscos.outputs.leafname }} ${{ needs.build-linux.outputs.leafname }} ${{ needs.build-macos.outputs.leafname }} ${{ needs.build-docs.outputs.leafname }}"
+          artifacts: "${{ needs.build-riscos.outputs.leafname }},${{ needs.build-linux.outputs.leafname }},${{ needs.build-macos.outputs.leafname }},${{ needs.build-docs.outputs.leafname }}"
           artifactContentType: application/zip
