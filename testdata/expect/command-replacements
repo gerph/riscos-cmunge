@@ -2,6 +2,9 @@
 s/^CMunge \d\.\d\d.*?$/CMunge <VERSION>/m
 s/^(Copyright .c. )\d\d\d\d-\d\d\d\d/$1YYYY-YYYY/m
 
+# Warning when used with -tgcc
+/^Warning: GCC has no support for -throwback flag/ d
+
 # Now the tools
 s/^(Norcroft RISC OS .*vsn) \d\.\d\d.*?$/$1 <VERSION>/m
 s/^(ARM AOF Macro Assembler) \d\.\d\d.*?$/$1 <VERSION>/m

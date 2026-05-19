@@ -1,0 +1,421 @@
+<?xml version="1.0"?>
+<!DOCTYPE riscos-prm PUBLIC "-//Gerph//DTD PRM documentation 1.03//EN"
+                            "http://gerph.org/dtd/103/prm.dtd">
+
+<riscos-prm>
+<chapter title="CMHG File Format">
+<section title="Introduction">
+<p>
+The CMHG file format (also used by CMunge) is a domain-specific language used to define the interfaces and structure of a RISC OS relocatable module. CMunge processes these description files to generate the assembly language "veneers" required to bridge the RISC OS kernel environment with C or C++ application code.
+</p>
+</section>
+
+<section title="Overview">
+<p>
+A CMHG file is a sequence of logical lines containing directives. Each directive consists of a keyword, a colon, and one or more parameters. CMHG and CMunge handle the low-level complexities of the RISC OS module header, ensuring that the C environment (stack, registers, etc.) is correctly initialized before calling user-written C functions.
+</p>
+<p>
+CMunge extends the original CMHG format with additional directives for error management, specialized veneers, and support for modern architectures (32-bit and 64-bit).
+</p>
+</section>
+
+<section title="Technical details">
+<subsection title="Syntax Rules">
+<p>
+The CMHG/CMunge parser follows these rules:
+<list type="unordered">
+  <item><p><strong>Logical Lines</strong>: The file consists of a sequence of logical lines.</p></item>
+  <item><p><strong>Comments</strong>: Start with a semicolon (<userinput>;</userinput>) and extend to the end of the physical line. All comments are removed before parsing.</p></item>
+  <item><p><strong>Directives</strong>: Keywords followed by a colon (<userinput>:</userinput>). Keywords are case-insensitive and consist of alphabetic characters and minus signs.</p></item>
+  <item><p><strong>Line Continuation</strong>: A physical line ending with a comma (<userinput>,</userinput>) indicates the logical line continues onto the next physical line.</p></item>
+  <item><p><strong>Strings</strong>: Enclosed in double quotes (<userinput>"</userinput>). Adjacent quoted strings (even if separated by whitespace or newlines) are concatenated before processing.</p></item>
+  <item><p><strong>Numbers</strong>: Unsigned decimal by default. Hexadecimal if prefixed with <userinput>&amp;</userinput> (RISC OS style) or <userinput>0x</userinput> (C style).</p></item>
+  <item><p><strong>Arguments</strong>: Lists of arguments may be separated by commas or spaces. Commas are required when splitting lists across lines.</p></item>
+</list>
+</p>
+</subsection>
+
+<subsection title="Integer Evaluation">
+<p>
+CMHG strips any surrounding parentheses from integer values to allow values to be used from C-style header files through <userinput>#include</userinput> directives.
+</p>
+<p>
+CMunge also supports simple additive operations on integer values. Expressions such as <userinput>(&amp;800 + 1)</userinput> are acceptable. No other arithmetic operations are supported.
+</p>
+</subsection>
+
+<subsection title="Module Identification">
+<category title="title-string">
+<p>
+Defines the module's internal name (as seen by <userinput>*Modules</userinput>). It should ideally be less than 16 characters and must be a single word.
+</p>
+<p><userinput>title-string: MyModule</userinput></p>
+</category>
+
+<category title="help-string">
+<p>
+Defines the descriptive string displayed by <userinput>*Help Modules</userinput>. The format is typically:
+</p>
+<p><userreplace>ModuleTitle</userreplace> <userreplace>VersionNumber</userreplace> <userreplace>Comment</userreplace></p>
+<p>
+The version number should be in the form <userinput>d.dd</userinput>.
+</p>
+<p><userinput>help-string: MyModule 1.00 (06 Apr 2026) Copyright 2026</userinput></p>
+</category>
+
+<category title="date-string">
+<p>
+(CMunge) An optional string specifying the build date. This is used if the developer feels the date is a different reference to the version number.
+</p>
+<p><userinput>date-string: 06 Apr 2026</userinput></p>
+</category>
+</subsection>
+
+<subsection title="Core Module Handlers">
+<category title="initialisation-code">
+<p>
+Specifies the C function called when the module is initialized or reinitialized.
+</p>
+<p>
+C Prototype:
+<code type="c">_kernel_oserror *init(const char *tail, int podule_base, void *pw);</code>
+</p>
+<p>
+<list type="unordered">
+  <item><p><userinput>tail</userinput>: Points to the string of arguments the module was invoked with.</p></item>
+  <item><p><userinput>podule_base</userinput>: The base address of the podule from which the module was invoked (or 0).</p></item>
+  <item><p><userinput>pw</userinput>: The module's private word. This should generally not be used except when required for OS calls (e.g., setting up veneers via <userinput>OS_Claim</userinput>).</p></item>
+</list>
+</p>
+<p>Return <userinput>NULL</userinput> for success, or a pointer to an error block otherwise. Finalisation code will not be called if initialization fails.</p>
+</category>
+
+<category title="finalisation-code">
+<p>
+Specifies the C function called when the module is being killed (just before the C library is killed).
+</p>
+<p>
+C Prototype:
+<code type="c">_kernel_oserror *final(int fatal, int podule, void *pw);</code>
+</p>
+<p>
+<userinput>fatal</userinput> contains the value of R10 on entry. Return <userinput>NULL</userinput> to allow termination, or an error pointer to refuse. Causing an abort in this routine will leave a 'dead' module in the chain.
+</p>
+</category>
+
+<category title="service-call-handler">
+<p>
+Specifies the C function for handling service calls. Optionally followed by a list of service numbers to filter for. The generated veneer passes only matching service calls to the handler; if no numbers are given, all service calls are passed, which is not recommended.
+</p>
+<p>
+C Prototype:
+<code type="c">void *service(int number, _kernel_swi_regs *r, void *pw);</code>
+</p>
+<p>
+When handling service calls it may be useful to have a pointer to the base of the module in memory. Use the <userinput>-zbase</userinput> command-line option to have CMunge define <userinput>extern int Image__RO_Base</userinput> in the generated header.
+</p>
+</category>
+
+<category title="module-is-runnable">
+<p>
+If specified, the module can be run as an application (e.g., via <userinput>*Run</userinput>). The C <userinput>main</userinput> function will be called in user mode.
+</p>
+<p>
+C Prototype:
+<code type="c">int main(int argc, char *argv[]);</code>
+</p>
+</category>
+
+<category title="module-is-not-reentrant">
+<p>
+Declares that the module is not reentrant. This prevents the module being entered again if it is already running.
+</p>
+</category>
+
+<category title="module-is-c-plus-plus">
+<p>
+(CMunge) Indicates the module includes C++ code built using CFront. CMunge generates code to call global constructors via <userinput>______main</userinput> during initialization.
+</p>
+</category>
+
+<category title="module-is-initialised-early">
+<p>
+(CMunge) Declares that the module should be initialized early in the boot sequence, primarily for ROM-resident modules.
+</p>
+</category>
+</subsection>
+
+<subsection title="SWI Interface">
+<category title="swi-chunk-base-number">
+<p>
+The base SWI number for the module's chunk (64 SWIs). Bit 17 (X-bit) must not be set.
+</p>
+</category>
+
+<category title="swi-handler-code">
+<p>
+The central dispatcher for all SWIs in the chunk.
+</p>
+<p>
+C Prototype:
+<code type="c">_kernel_oserror *swi_handler(int number, _kernel_swi_regs *r, void *pw);</code>
+</p>
+<p>
+<userinput>number</userinput> is the offset (0-63). Registers <userinput>R0-R9</userinput> on input can be updated via <userinput>r-&gt;r[n]</userinput> to change return values.
+</p>
+</category>
+
+<category title="swi-decoding-table">
+<p>
+Defines the SWI prefix and the names for the decoding table.
+</p>
+<p>
+<extended-example type="format">
+swi-decoding-table: MyMod, Get, Set, Reset/MyResetHandler
+</extended-example>
+</p>
+<p>
+The first entry is the SWI prefix. Each subsequent name entry may be followed by <userinput>/&lt;handler&gt;</userinput> to use a particular routine to handle that SWI instead of the central handler.
+</p>
+</category>
+
+<category title="swi-decoding-code">
+<p>
+Provides custom name-to-number and number-to-name translations. Supports 1-function (legacy) and 2-function interfaces.
+</p>
+<p>
+<strong>1-function interface:</strong>
+<code type="c">void decoder(int r[4], void *pw);</code>
+</p>
+<p>
+If <userinput>r[0] &lt; 0</userinput>, a name-to-number conversion is requested: <userinput>r[1]</userinput> points to a control-terminated (not null-terminated) string. If recognised, set <userinput>r[0]</userinput> to the SWI offset within the block; otherwise leave <userinput>r[0]</userinput> negative.
+</p>
+<p>
+Otherwise, a number-to-name conversion is requested: <userinput>r[0]</userinput> is the SWI offset, <userinput>r[1]</userinput> points to the output buffer, <userinput>r[2]</userinput> is the current write offset into that buffer, and <userinput>r[3]</userinput> points to the byte beyond the end of the buffer. Write the name (without a terminator) starting at <userinput>r[2]</userinput> and update <userinput>r[2]</userinput> to reflect the number of bytes written.
+</p>
+<p>
+<strong>2-function interface:</strong>
+<code type="c">int name2number(const char *string, void *pw);
+int number2name(int number, char *buffer, int offset, int end, void *pw);</code>
+</p>
+<p>
+<userinput>name2number</userinput> converts a control-terminated string to a SWI offset (0–63); return a negative value if unrecognised. <userinput>number2name</userinput> writes the unterminated name into <userinput>buffer</userinput> starting at <userinput>offset</userinput> and returns the updated offset; if there is no name for the given offset, return <userinput>offset</userinput> unchanged.
+</p>
+</category>
+</subsection>
+
+<subsection title="Command Interface">
+<category title="command-keyword-table">
+<p>
+Defines the module's <userinput>*</userinput> command table. The first parameter is the name of the central command handler function. It may be specified as <userinput>-</userinput> if every command in the table has its own <userinput>handler:</userinput> sub-keyword or <userinput>no-handler:</userinput> flag, in which case no central handler is needed.
+</p>
+<p>
+C Prototype for default handler:
+<code type="c">_kernel_oserror *command(const char *arg_string, int argc, int number, void *pw);</code>
+</p>
+<p>
+<userinput>number</userinput> is the index of the command that was invoked, counting from 0 in the order they appear in the table.
+</p>
+<p>
+Each command is described using a set of sub-keywords in parentheses:
+<definition-table head-name="Keyword" head-value="Description">
+  <definition name="min-args">Minimum arguments (0-255, default 0).</definition>
+  <definition name="max-args">Maximum arguments (0-255, default 0).</definition>
+  <definition name="gstrans-map">Bitmap indicating which arguments to GSTrans (default 0).</definition>
+  <definition name="fs-command">Marks it as a filing system command.</definition>
+  <definition name="international">Syntax/help messages use tokens for translation.</definition>
+  <definition name="add-syntax">Appends the syntax string to the help text.</definition>
+  <definition name="configure">Command is for <userinput>*Configure</userinput> / <userinput>*Status</userinput>.</definition>
+  <definition name="status">Equivalent to <userinput>configure</userinput>.</definition>
+  <definition name="help">Handler is called for help message processing (unsupported in some versions).</definition>
+  <definition name="invalid-syntax">Syntax error string/token (default empty).</definition>
+  <definition name="help-text">Help string/token (default empty).</definition>
+  <definition name="handler">Specific C function to call for this command.</definition>
+  <definition name="no-handler">Command has no code handler (help-only).</definition>
+</definition-table>
+</p>
+<p>
+Special handler behaviour for different invocation types:
+</p>
+<p>
+<definition-table head-name="Invocation" head-value="Description">
+  <definition name="*Help">
+    <userinput>arg_string</userinput> points to a buffer to write into. Cast it using the <userinput>help_PRINT_BUFFER</userinput> macro, fill it with a zero-terminated string, and return the initial value of <userinput>arg_string</userinput>. Return <userinput>NULL</userinput> to print nothing.
+  </definition>
+  <definition name="*Configure syntax">
+    <userinput>arg_string</userinput> is <userinput>arg_CONFIGURE_SYNTAX</userinput> (a cast of 0). Print the syntax and return <userinput>NULL</userinput>.
+  </definition>
+  <definition name="*Status">
+    <userinput>arg_string</userinput> is <userinput>arg_STATUS</userinput> (a cast of 1). Print the current status and return <userinput>NULL</userinput>.
+  </definition>
+  <definition name="*Configure with value">
+    Use <userinput>arg_string</userinput> and <userinput>argc</userinput> to apply the configuration. Return <userinput>NULL</userinput> on success, an error pointer on failure, or one of the special values defined in the generated header:
+    <definition-table head-name="Value" head-value="Meaning">
+      <definition name="configure_BAD_OPTION">The option was not recognised.</definition>
+      <definition name="configure_NUMBER_NEEDED">A numeric argument was required but not given.</definition>
+      <definition name="configure_TOO_LARGE">The value given was too large.</definition>
+      <definition name="configure_TOO_MANY_PARAMS">Too many parameters were supplied.</definition>
+    </definition-table>
+  </definition>
+</definition-table>
+</p>
+</category>
+</subsection>
+
+<subsection title="Veneers and Callbacks">
+<p>
+Veneers create entry points that bridge RISC OS vectors/events to C functions. They are defined as <userinput>EntryName[/HandlerName]([params])</userinput>.
+</p>
+<category title="generic-veneers">
+<p>
+Used for general callbacks (e.g., from <userinput>OS_AddCallBack</userinput>). The optional parameters are:
+</p>
+<p>
+<definition-table head-name="Parameter" head-value="Description">
+  <definition name="private-word: &lt;reg&gt;">The register in which the private word is passed on entry to the veneer. Defaults to R12. Normally R12 is not preserved by a generic veneer unless a <userinput>private-word</userinput> register is specified. To force R12 to be preserved without using it as the private word source, specify <userinput>private-word: r12</userinput> explicitly.</definition>
+  <definition name="carry-capable:">The handler may return <userinput>VENEER_SETCARRY</userinput> instead of an error pointer or <userinput>NULL</userinput>. This causes the carry flag to be set on return. All registers are taken from the register block as normal.</definition>
+</definition-table>
+</p>
+</category>
+
+<category title="vector-handlers">
+<p>
+Used for claiming RISC OS vectors (e.g., <userinput>TickerV</userinput>). For each entry, CMunge generates an assembly entry point and an <userinput>extern void name(void)</userinput> symbol in the C header. This symbol must never be called directly — pass its address to <userinput>OS_Claim</userinput> or similar. All such vector claims must be made in SVC mode, for example from initialisation code or a SWI handler.
+</p>
+<p>
+The optional parameter <userinput>error-capable:</userinput> allows the handler to return an error: use the <userinput>VECTOR_ERROR(err)</userinput> macro instead of <userinput>VECTOR_CLAIM</userinput>. This sets the V flag and claims the vector, returning the error to the caller. All other registers are taken from the register block. If the <userinput>err</userinput> pointer is <userinput>NULL</userinput>, the result is equivalent to <userinput>VECTOR_CLAIM</userinput>.
+</p>
+<p>
+C Prototype:
+<code type="c">int handler(_kernel_swi_regs *r, void *pw);</code>
+</p>
+<p>
+Return <userinput>VECTOR_CLAIM</userinput> or <userinput>VECTOR_PASSON</userinput>. The register block <userinput>r-&gt;r[0]</userinput> through <userinput>r-&gt;r[9]</userinput> contains the values on entry and can be updated to change the values returned to the caller.
+</p>
+</category>
+
+<category title="irq-handlers">
+<p>
+Obsolete alias for <userinput>vector-handlers</userinput>. New code should use <userinput>vector-handlers</userinput> instead.
+</p>
+</category>
+
+<category title="vector-traps">
+<p>
+(CMunge) Advanced vector chaining handler that provides access to the remainder of the vector chain. The register block passed in is the one with which the vector was called.
+</p>
+<p>
+C Prototype:
+<code type="c">_kernel_oserror *handler(_kernel_swi_regs *r, void *pw, vectortrap_f trap, void *trappw);</code>
+</p>
+<p>
+The <userinput>trap</userinput> function can be called to invoke the remainder of the vector chain:
+</p>
+<p>
+<code type="c">_kernel_oserror *trap(_kernel_swi_regs *r2, void *trappw);</code>
+</p>
+<p>
+The register block passed to <userinput>trap()</userinput> is used to call the chain and is updated with the values returned. It may be the same block as the input or a different one. Any error returned by the chain can be inspected and re-returned or suppressed.
+</p>
+<p>
+Return values from the handler:
+</p>
+<p>
+<definition-table head-name="Return value" head-value="Effect">
+  <definition name="NULL">Claim the vector without passing on.</definition>
+  <definition name="VECTORTRAP_PASSON">Pass on to the remainder of the chain, as if <userinput>return trap(r, trappw)</userinput> had been called. This form reduces stack usage considerably and is preferred when rejecting uninteresting calls.</definition>
+  <definition name="error pointer">Claim the vector and return the error to the caller.</definition>
+</definition-table>
+</p>
+</category>
+
+<category title="event-handler">
+<p>
+Veneer for handling RISC OS events. Only one entry/handler pair may be given per <userinput>event-handler</userinput> directive, but the directive may be repeated to register multiple handlers. A list of event numbers may follow to enable fast accept/reject filtering — only those events will be passed to the handler. Providing event numbers is strongly recommended for performance.
+</p>
+<p>
+C Prototype:
+<code type="c">int handler(_kernel_swi_regs *r, void *pw);</code>
+</p>
+<p>
+Return 0 to pass the event on, or non-zero to claim it.
+</p>
+</category>
+</subsection>
+
+<subsection title="Error Management (CMunge)">
+<category title="error-chunk-base-number / error-base">
+<p>
+The base error number for the module's error chunk. Error blocks are allocated in groups of 256. CMunge will accept any alignment so that sub-blocks can be re-used. The value is exported as <userinput>ERROR_BASE</userinput> in the C header.
+</p>
+<p><userinput>error-chunk-base-number: &amp;12345</userinput></p>
+<p>
+The directive <userinput>error-base</userinput> is an accepted alias.
+</p>
+</category>
+<category title="error-identifiers">
+<p>
+Defines error constants exported to the C header as <userinput>_kernel_oserror *</userinput> via a macro to avoid copying to workspace.
+</p>
+<p>
+<userinput>identifiers ( [&lt;number&gt;,] &lt;string&gt; )</userinput>
+</p>
+</category>
+</subsection>
+
+<subsection title="Other Directives">
+<category title="library-initialisation-code">
+<p>Sets the symbol for C library initialization, replacing the default <userinput>_clib_initialisemodule</userinput>. This is called before the C environment is fully set up, so the replacement routine must be written in assembly. It must call <userinput>_clib_initialisemodule</userinput> before returning.</p>
+</category>
+<category title="library-enter-code">
+<p>Sets the symbol for module entry, replacing the default <userinput>_clib_entermodule</userinput>.</p>
+</category>
+<category title="international-help-file">
+<p>Embeds a literal pathname in the module header for internationalized help messages. When the OS supports it, any help messages tagged as <userinput>international</userinput> in the command table will be looked up in this Messages file.</p>
+</category>
+</subsection>
+</section>
+
+<section title="Examples">
+<p>
+<extended-example type="format">
+; CMunge description for a sample module
+title-string: SampleMod
+help-string:  Sample 1.00 (06 Apr 2026)
+
+initialisation-code: mod_init
+finalisation-code:   mod_final
+
+swi-chunk-base-number: &amp;58B00
+swi-handler-code:      mod_swi
+swi-decoding-table:    Sample, Get, Set
+
+command-keyword-table: mod_command
+  MyCmd(min-args: 0, max-args: 1, help-text: "Usage: *MyCmd [&lt;arg&gt;]")
+
+generic-veneers: callback/callback_handler(private-word: r1)
+</extended-example>
+</p>
+</section>
+
+</chapter>
+
+<meta>
+ <maintainer>
+  <email name="CMunge Developers" address="gerph@gerph.org" />
+ </maintainer>
+ <disclaimer>
+    <p>Documentation based on CMunge manual and source code.</p>
+ </disclaimer>
+
+ <history>
+  <revision number="5" author="GCLI" date="06 Apr 2026" title="Comprehensive documentation from Manual">
+    <change>Updated with detailed information from Docs/Manual, including integer evaluation rules and specific handler prototypes.</change>
+  </revision>
+  <revision number="6" author="Gerph" date="07 Apr 2026" title="Additional directives, corrections and detail">
+    <change>Added module-is-not-reentrant directive. Added irq-handlers alias. Added error-base alias and expanded error-chunk-base-number description. Improved library-initialisation-code and international-help-file descriptions. Added configure return codes. Added library-enter-code description. Added event-handler prototype and return value. Expanded vector-handlers with extern symbol usage and SVC mode requirement. Expanded generic-veneers with r12 preservation note. Expanded vector-traps with trap() usage and VECTORTRAP_PASSON behaviour. Expanded swi-decoding-code with full buffer protocol. Added command number parameter explanation and central handler '-' usage. Added service-call-handler cross-reference to -zbase.</change>
+  </revision>
+ </history>
+</meta>
+
+</riscos-prm>
