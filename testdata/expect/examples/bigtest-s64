@@ -154,8 +154,8 @@ _CMUNGE_init:
 	CMP	x0, #0
 	BNE	_CMUNGE_init_fail
 	BL	______main
-	LDP	x0, x2, [sp], #16
-	LDR	x1, [sp]
+	LDP	x0, x1, [sp], #16
+	LDR	x2, [sp]
 	BL	Mod_Init                    // (tail, instance (0), pwp)
 	CMP	x0, #0
 	BEQ	_CMUNGE_init_exit

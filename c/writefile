@@ -1278,8 +1278,8 @@ static void init(void) {
       }
 
       if (opt.init) {
-        fprintf(file, "\tLDP\tx0, x2, [sp], #16\n");
-        fprintf(file, "\tLDR\tx1, [sp]\n");
+        fprintf(file, "\tLDP\tx0, x1, [sp], #16\n");
+        fprintf(file, "\tLDR\tx2, [sp]\n");
         fprintf(file, "\tBL\t%s                    // (tail, instance (0), pwp)\n", opt.init);
         fprintf(file, "\tCMP\tx0, #0\n");
         fprintf(file, "\tBEQ\t_CMUNGE_init_exit\n");
