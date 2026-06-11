@@ -135,7 +135,7 @@ static void rust_signature(const char *alias,
   args[3] = arg3;
   args[4] = arg4;
 
-  fprintf(file, "pub type %s = extern \"C\" fn(", alias);
+  fprintf(file, "pub type %s = unsafe extern \"C\" fn(", alias);
   started = 0;
   for (i = 0; i < 5; i++)
   {
@@ -440,7 +440,7 @@ static void rust_handler_support(handler_list head,
   }
   if (add_trap_args)
   {
-    fprintf(file, "pub type vectortrap_f = extern \"C\" fn(*mut KernelSwiRegs, *mut c_void) -> *mut KernelOSError;\n");
+    fprintf(file, "pub type vectortrap_f = unsafe extern \"C\" fn(*mut KernelSwiRegs, *mut c_void) -> *mut KernelOSError;\n");
     rust_error_ptr_const("VECTORTRAP_PASSON", 1);
   }
 }

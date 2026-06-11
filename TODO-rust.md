@@ -18,10 +18,10 @@ This file tracks the `-xrs` work for CMunge.
 - [x] Emit 64-bit-friendly vector/generic helper constants.
 - [x] Emit embedded error symbol declarations for the 64-bit Rust case.
 - [x] Add Rust regression coverage for `-zerrors`.
+- [x] Use `unsafe extern "C" fn` for generated callback and handler aliases.
 
 ## Still Missing
 
-- [ ] Decide whether generated Rust should prefer `unsafe extern "C" fn` aliases, `extern` declarations, helper functions, or a mix for each category.
 - [ ] Emit Rust equivalents for any remaining callback forms not yet covered by the current tests.
 - [ ] Cover `-zoslib`/`-zoslibpath` with Rust-side type choices, or reject them explicitly for `-xrs`.
 - [ ] Add more regression coverage for unsupported combinations such as `-xrs` with `-zoslib`.
