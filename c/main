@@ -95,6 +95,7 @@ int main(int argc, char *argv[]) {
   DateStamp();
   WriteFile();
   WriteHeader();
+  WriteRustHeader();
   WriteExport_Hdr();
   WriteExport_H();
   AssembleFile();

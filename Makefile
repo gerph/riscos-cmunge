@@ -21,6 +21,7 @@ OBJS       = \
         o.gfile         \
         o.throwback     \
         o.writeheader   \
+        o.writerust     \
         o.writeexport   \
         o.writefile     \
         o.blank

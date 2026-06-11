@@ -1,0 +1,240 @@
+/*
+ * Copyright (C) 2026 Robin Watts/Justin Fletcher
+ */
+
+#include <stdio.h>
+#include <string.h>
+
+#include "gfile.h"
+#include "error.h"
+#include "options.h"
+#include "comments.h"
+
+#include "copyright.h"
+
+#include "VersionNum"
+
+static FILE *file;
+
+/*************************************************** Gerph *********
+ Function:     rust_alias_name
+ Description:  Form a Rust type alias identifier from a symbol name.
+ Parameters:   name = symbol name
+ Returns:      pointer to static string
+ ******************************************************************/
+static const char *rust_alias_name(const char *name)
+{
+  static char buffer[256];
+  int pos = 0;
+
+  while (*name != '\0' && pos < (int)sizeof(buffer) - 3)
+  {
+    if ((*name >= 'A' && *name <= 'Z') ||
+        (*name >= 'a' && *name <= 'z') ||
+        (*name >= '0' && *name <= '9') ||
+        (*name == '_'))
+      buffer[pos++] = *name;
+    else
+      buffer[pos++] = '_';
+    name++;
+  }
+  buffer[pos++] = 'F';
+  buffer[pos++] = 'n';
+  buffer[pos] = '\0';
+  return buffer;
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_write_escaped
+ Description:  Write a string escaped for a Rust string literal.
+ Parameters:   text = text to write
+ Returns:      none
+ ******************************************************************/
+static void rust_write_escaped(const char *text)
+{
+  while (*text != '\0')
+  {
+    switch (*text)
+    {
+      case '\\':
+        fputs("\\\\", file);
+        break;
+      case '"':
+        fputs("\\\"", file);
+        break;
+      case '\n':
+        fputs("\\n", file);
+        break;
+      case '\t':
+        fputs("\\t", file);
+        break;
+      case '\r':
+        fputs("\\r", file);
+        break;
+      default:
+        fputc(*text, file);
+        break;
+    }
+    text++;
+  }
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_type
+ Description:  Map CMunge's internal type spelling to Rust FFI spelling.
+ Parameters:   type = type name to translate
+ Returns:      pointer to static string
+ ******************************************************************/
+static const char *rust_type(const char *type)
+{
+  if (strcmp(type, "%error%") == 0)
+    return "*mut KernelOSError";
+  if (strcmp(type, "%regs%") == 0)
+    return "*mut KernelSwiRegs";
+  if (strcmp(type, "void") == 0)
+    return "()";
+  if (strcmp(type, "const char *") == 0)
+    return "*const u8";
+  if (strcmp(type, "char *") == 0)
+    return "*mut u8";
+  if (strcmp(type, "void *") == 0)
+    return "*mut c_void";
+  if (strcmp(type, "int") == 0)
+    return "i32";
+  if (strcmp(type, "unsigned int") == 0)
+    return "u32";
+
+  return "/* unsupported type */ *mut c_void";
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_signature
+ Description:  Emit a Rust type alias for a C ABI function signature.
+ Parameters:   alias = alias name to emit
+               returntype = internal CMunge type string
+               arg0..arg4 = parameter types, terminated with NULLs
+ Returns:      none
+ ******************************************************************/
+static void rust_signature(const char *alias,
+                           const char *returntype,
+                           const char *arg0,
+                           const char *arg1,
+                           const char *arg2,
+                           const char *arg3,
+                           const char *arg4)
+{
+  const char *args[5];
+  int i;
+  int started;
+
+  args[0] = arg0;
+  args[1] = arg1;
+  args[2] = arg2;
+  args[3] = arg3;
+  args[4] = arg4;
+
+  fprintf(file, "pub type %s = extern \"C\" fn(", alias);
+  started = 0;
+  for (i = 0; i < 5; i++)
+  {
+    if (args[i] == NULL)
+      break;
+    if (started)
+      fprintf(file, ", ");
+    fprintf(file, "%s", rust_type(args[i]));
+    started = 1;
+  }
+  fprintf(file, ")");
+  if (strcmp(returntype, "void") != 0)
+    fprintf(file, " -> %s", rust_type(returntype));
+  fprintf(file, ";\n");
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_const_string
+ Description:  Emit a public Rust string constant.
+ Parameters:   name = constant name
+               value = constant string value
+ Returns:      none
+ ******************************************************************/
+static void rust_const_string(const char *name, const char *value)
+{
+  fprintf(file, "pub const %s: &str = \"", name);
+  rust_write_escaped(value);
+  fprintf(file, "\";\n");
+}
+
+/*************************************************** Gerph *********
+ Function:     WriteRustHeader
+ Description:  Write a Rust module file containing Rust FFI declarations
+               derived from the CMHG input.
+ Parameters:   none
+ Returns:      none
+ ******************************************************************/
+void WriteRustHeader(void)
+{
+  if (!opt.x_rs)
+    return;
+
+  file = file_write(opt.x_rs, remove_onfail);
+
+  if (file == NULL)
+    ErrorFatal("Couldn't create Rust header file: %s", opt.x_rs);
+
+  c_comment(file, "Generated by CMunge " Module_FullVersionAndDate "\n"
+                 "CMunge " Copyright_CMunge);
+  fprintf(file, "\n");
+
+  fprintf(file, "use core::ffi::c_void;\n\n");
+
+  fprintf(file, "#[repr(C)]\n");
+  fprintf(file, "pub struct KernelSwiRegs {\n");
+  fprintf(file, "    pub r: [i32; 10],\n");
+  fprintf(file, "}\n\n");
+
+  fprintf(file, "#[repr(C)]\n");
+  fprintf(file, "pub struct KernelOSError {\n");
+  fprintf(file, "    pub errnum: i32,\n");
+  fprintf(file, "    pub errmess: [u8; 252],\n");
+  fprintf(file, "}\n\n");
+
+  fprintf(file, "pub const CMUNGE_VERSION: i32 = %i;\n", Module_Version);
+  fprintf(file, "pub const CMHG_VERSION: i32 = 531;\n");
+  if (!opt.mode_errors)
+  {
+    rust_const_string("MODULE_TITLE", opt.title);
+    {
+      char *str = opt.help;
+      char help[512];
+      int pos = 0;
+      while (*str != '\0' && *str != '\t' && pos < (int)sizeof(help) - 1)
+      {
+        help[pos++] = *str++;
+      }
+      help[pos] = '\0';
+      rust_const_string("MODULE_HELP", help);
+    }
+    fprintf(file, "pub const MODULE_VERSION_STRING: &str = \"%d.%02d\";\n",
+            opt.version / 100, opt.version % 100);
+    fprintf(file, "pub const MODULE_VERSION_NUMBER: i32 = %d;\n", opt.version);
+    rust_const_string("MODULE_DATE", opt.date);
+    if (opt.mfile)
+      rust_const_string("MODULE_MESSAGES_FILE", opt.mfile);
+  }
+  fprintf(file, "\n");
+
+  if (opt.init)
+    rust_signature(rust_alias_name(opt.init), "%error%",
+                   "const char *", "int", "void *", NULL, NULL);
+  if (opt.final)
+    rust_signature(rust_alias_name(opt.final), "%error%",
+                   "int", "int", "void *", NULL, NULL);
+  if (opt.service)
+    rust_signature(rust_alias_name(opt.service), "void",
+                   "int", "%regs%", "void *", NULL, NULL);
+  if (opt.swi_handler)
+    rust_signature(rust_alias_name(opt.swi_handler), "%error%",
+                   "int", "%regs%", "void *", NULL, NULL);
+
+  file_close(file);
+}

@@ -7,5 +7,6 @@
 #define WRITEHEADER_H
 
 void WriteHeader(void);
+void WriteRustHeader(void);
 
 #endif
