@@ -25,4 +25,87 @@ pub const MODULE_MESSAGES_FILE: &str = "Resources:$.Resources.MimeMap.Messages";
 
 pub type Mod_InitFn = extern "C" fn(*const u8, i32, *mut c_void) -> *mut KernelOSError;
 pub type Mod_FinalFn = extern "C" fn(i32, i32, *mut c_void) -> *mut KernelOSError;
+pub type Mod_CommandsFn = extern "C" fn(*const u8, i32, i32, *mut c_void) -> *mut KernelOSError;
+pub type Mod_MimeMapFn = extern "C" fn(*const u8, i32, i32, *mut c_void) -> *mut KernelOSError;
+pub const HELP_PRINT_BUFFER: *mut KernelOSError = (0usize) as *mut KernelOSError;
+pub const ARG_CONFIGURE_SYNTAX: *mut u8 = core::ptr::null_mut();
+pub const ARG_STATUS: *mut u8 = (1usize) as *mut u8;
+pub const CONFIGURE_BAD_OPTION: *mut KernelOSError = (-1isize) as *mut KernelOSError;
+pub const CONFIGURE_NUMBER_NEEDED: *mut KernelOSError = (1usize) as *mut KernelOSError;
+pub const CONFIGURE_TOO_LARGE: *mut KernelOSError = (2usize) as *mut KernelOSError;
+pub const CONFIGURE_TOO_MANY_PARAMS: *mut KernelOSError = (3usize) as *mut KernelOSError;
+pub const CMD_ReadMimeMap: i32 = 0;
+pub const CMD_MimeMap: i32 = 1;
+pub const CMD_Inet_ServiceByPort: i32 = 2;
+pub const CMD_Inet_ServiceByName: i32 = 3;
+pub const CMD_Inet_DecodeError: i32 = 4;
 pub type Mod_SWIFn = extern "C" fn(i32, *mut KernelSwiRegs, *mut c_void) -> *mut KernelOSError;
+pub type SWI_WobbleFn = extern "C" fn(i32, *mut KernelSwiRegs, *mut c_void) -> *mut KernelOSError;
+pub const MimeMap_00: u32 = 0x00050b00;
+pub const MimeMap_Translate: u32 = 0x00050b00;
+pub const XMimeMap_Translate: u32 = 0x00070b00;
+pub const MimeMap_Wobble: u32 = 0x00050b01;
+pub const XMimeMap_Wobble: u32 = 0x00070b01;
+pub const ERROR_BAD_SWI: *mut KernelOSError = (-1isize) as *mut KernelOSError;
+unsafe extern "C" {
+    pub static Event_Entry: u8;
+}
+pub type Event_HandlerFn = extern "C" fn(*mut KernelSwiRegs, *mut c_void) -> i32;
+unsafe extern "C" {
+    pub static SecondEvent_Entry: u8;
+}
+pub type SecondEvent_HandlerFn = extern "C" fn(*mut KernelSwiRegs, *mut c_void) -> i32;
+unsafe extern "C" {
+    pub static Upcall_Entry: u8;
+}
+pub type Upcall_HandlerFn = extern "C" fn(*mut KernelSwiRegs, *mut c_void) -> i32;
+unsafe extern "C" {
+    pub static CallBack_Entry: u8;
+}
+pub type CallBack_HandlerFn = extern "C" fn(*mut KernelSwiRegs, *mut c_void) -> i32;
+unsafe extern "C" {
+    pub static generic_entry: u8;
+}
+pub type generic_handlerFn = extern "C" fn(*mut KernelSwiRegs, *mut c_void) -> *mut KernelOSError;
+unsafe extern "C" {
+    pub static second_entry: u8;
+}
+pub type second_handlerFn = extern "C" fn(*mut KernelSwiRegs, *mut c_void) -> *mut KernelOSError;
+pub const VENEER_SETCARRY: *mut KernelOSError = (0usize) as *mut KernelOSError;
+unsafe extern "C" {
+    pub static VectorTest: u8;
+}
+pub const VECTOR_PASSON: i32 = 1;
+pub const VECTOR_CLAIM: i32 = 0;
+#[inline]
+pub fn vector_error(err: *const KernelOSError) -> i32 {
+    err as isize as i32
+}
+unsafe extern "C" {
+    pub static Trap_Entry: u8;
+}
+pub type Trap_HandlerFn = extern "C" fn(*mut KernelSwiRegs, *mut c_void, vectortrap_f, *mut c_void) -> *mut KernelOSError;
+pub type vectortrap_f = extern "C" fn(*mut KernelSwiRegs, *mut c_void) -> *mut KernelOSError;
+pub const VECTORTRAP_PASSON: *mut KernelOSError = (1usize) as *mut KernelOSError;
+pub const ERROR_BASE: u32 = 0x00001247;
+unsafe extern "C" {
+    pub static __err_err_Hello: KernelOSError;
+}
+#[inline]
+pub unsafe fn err_Hello() -> *const KernelOSError {
+    &raw const __err_err_Hello
+}
+unsafe extern "C" {
+    pub static __err_err_Wibble: KernelOSError;
+}
+#[inline]
+pub unsafe fn err_Wibble() -> *const KernelOSError {
+    &raw const __err_err_Wibble
+}
+unsafe extern "C" {
+    pub static __err_err_Thingy: KernelOSError;
+}
+#[inline]
+pub unsafe fn err_Thingy() -> *const KernelOSError {
+    &raw const __err_err_Thingy
+}

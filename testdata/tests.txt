@@ -115,6 +115,12 @@ Command: $TOOL -64bit -throwback cmhg.errors-only -zerrors -s s/errors-only-64 -
 Creates: s/errors-only-64
 Expect: expect/examples/errors-only-64
 
+Test: Only errors Rust header output
+Command: $TOOL -64bit -throwback cmhg.errors-only -zerrors -xrs rs/errors-only-rs -p
+Creates: rs/errors-only-rs
+Text:Matches: expect/examples/errors-only-rs
+Text:Replace: expect/output-replacements
+
 
 
 Group: Blank
