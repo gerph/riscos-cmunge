@@ -122,6 +122,18 @@ Text:Matches: expect/examples/errors-only-rs
 Text:Replace: expect/output-replacements
 
 
+Group: Option: Rust header unsupported combinations
+Replace: expect/command-replacements
+Expect: expect/examples/rust-zoslib-unsupported
+RC: 1
+
+Test: Rust header with -zoslib
+Command: $TOOL -throwback cmhg.bigtest -xrs rs/bigtest-rs -zoslib -p -DRobin=Genius -DNoBugsPlease -UJustin -I@.inc.
+
+Test: Rust header with -zoslibpath
+Command: $TOOL -throwback cmhg.bigtest -xrs rs/bigtest-rs -zoslibpath -p -DRobin=Genius -DNoBugsPlease -UJustin -I@.inc.
+
+
 
 Group: Blank
 Replace: expect/command-replacements

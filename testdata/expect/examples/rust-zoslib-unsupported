@@ -1,0 +1,4 @@
+CMunge <VERSION>
+Copyright (c) YYYY-YYYY Robin Watts/Gerph
+Norcroft RISC OS ARM C vsn <VERSION>
+Serious Error: Rust header output does not yet support -zoslib or -zoslibpath
