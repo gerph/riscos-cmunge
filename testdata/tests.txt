@@ -74,6 +74,20 @@ Text:Matches: expect/examples/$ARG1-rs
 Text:Replace: expect/output-replacements
 Args: bigtest
 
+Test: Rust header extra pair coverage
+Command: $TOOL -throwback cmhg.$ARG1 -xrs rs/$ARG1-rs -zbase -p
+Creates: rs/rust-extra-pair-rs
+Text:Matches: expect/examples/$ARG1-rs
+Text:Replace: expect/output-replacements
+Args: rust-extra-pair
+
+Test: Rust header extra single decoder coverage
+Command: $TOOL -throwback cmhg.$ARG1 -xrs rs/$ARG1-rs -p
+Creates: rs/rust-extra-single-rs
+Text:Matches: expect/examples/$ARG1-rs
+Text:Replace: expect/output-replacements
+Args: rust-extra-single
+
 Test: Big test of many of the features
 Command: $TOOL -throwback cmhg.$ARG1 -s s/$ARG1 -o o.$ARG1 -p -d h/$ARG1 -DRobin=Genius -DNoBugsPlease -UJustin -I@.inc. -zbase -xhdr hdr/$ARG1 -xh h/$ARG1_swis
 Creates: h/bigtest h/bigtest_swis hdr/bigtest o/bigtest s/bigtest

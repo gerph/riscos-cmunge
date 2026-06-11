@@ -153,6 +153,49 @@ static void rust_signature(const char *alias,
 }
 
 /*************************************************** Gerph *********
+ Function:     rust_signature_direct
+ Description:  Emit a Rust type alias using direct Rust FFI type names.
+ Parameters:   alias = alias name to emit
+               returntype = direct Rust return type, or NULL for ()
+               arg0..arg4 = direct Rust parameter types, terminated with NULLs
+ Returns:      none
+ ******************************************************************/
+static void rust_signature_direct(const char *alias,
+                                  const char *returntype,
+                                  const char *arg0,
+                                  const char *arg1,
+                                  const char *arg2,
+                                  const char *arg3,
+                                  const char *arg4)
+{
+  const char *args[5];
+  int i;
+  int started;
+
+  args[0] = arg0;
+  args[1] = arg1;
+  args[2] = arg2;
+  args[3] = arg3;
+  args[4] = arg4;
+
+  fprintf(file, "pub type %s = unsafe extern \"C\" fn(", alias);
+  started = 0;
+  for (i = 0; i < 5; i++)
+  {
+    if (args[i] == NULL)
+      break;
+    if (started)
+      fprintf(file, ", ");
+    fprintf(file, "%s", args[i]);
+    started = 1;
+  }
+  fprintf(file, ")");
+  if (returntype != NULL)
+    fprintf(file, " -> %s", returntype);
+  fprintf(file, ";\n");
+}
+
+/*************************************************** Gerph *********
  Function:     rust_extern_symbol
  Description:  Emit a Rust extern static declaration for a non-callable
                entry symbol.
@@ -372,6 +415,31 @@ static void rust_swi_support(void)
 }
 
 /*************************************************** Gerph *********
+ Function:     rust_swi_decoder_support
+ Description:  Emit SWI decoder handler aliases.
+ Parameters:   none
+ Returns:      none
+ ******************************************************************/
+static void rust_swi_decoder_support(void)
+{
+  if (!opt.swi_decoder)
+    return;
+
+  if (opt.swi_decoder->handler)
+  {
+    rust_signature(rust_alias_name(opt.swi_decoder->name), "int",
+                   "const char *", "void *", NULL, NULL, NULL);
+    rust_signature(rust_alias_name(opt.swi_decoder->handler), "int",
+                   "int", "char *", "int", "int", "void *");
+  }
+  else
+  {
+    rust_signature_direct(rust_alias_name(opt.swi_decoder->name), "i32",
+                          "*mut i32", "*mut c_void", NULL, NULL, NULL);
+  }
+}
+
+/*************************************************** Gerph *********
  Function:     rust_event_support
  Description:  Emit event entry symbols and handler aliases.
  Parameters:   none
@@ -553,6 +621,7 @@ void WriteRustHeader(void)
                    "int", "%regs%", "void *", NULL, NULL);
   rust_command_support();
   rust_swi_support();
+  rust_swi_decoder_support();
   rust_event_support();
   if (opt.irqs)
     rust_handler_support(opt.irqs, "int", 0, 0, 0);

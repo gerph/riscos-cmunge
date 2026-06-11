@@ -21,7 +21,6 @@ This file tracks the `-xrs` work for CMunge.
 - [x] Use `unsafe extern "C" fn` for generated callback and handler aliases.
 - [x] Reject `-xrs` with `-zoslib` and `-zoslibpath`.
 - [x] Add regression coverage for unsupported OSLib Rust-header combinations.
+- [x] Emit and test service-call-handler and both forms of swi-decoding-code.
 
 ## Still Missing
-
-- [ ] Emit Rust equivalents for any remaining callback forms not yet covered by the current tests.
