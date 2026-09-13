@@ -1,0 +1,715 @@
+/*
+ * Copyright (C) 2025 Robin Watts/Justin Fletcher
+ */
+
+/* D interface (.di) header writer.
+ *
+ * This renders the same module entry point descriptions as writeheader.c
+ * (see protoinfo.h) but as a D 'interface' module, for use when a module
+ * is implemented (or called into) from D rather than C. See
+ * c-header-to-di.pl for the equivalent mechanical C-header-to-D
+ * translation used for headers CMunge does not itself generate (eg
+ * kernel.h, swis.h); this file follows the same D conventions so the two
+ * kinds of generated .di content read consistently.
+ */
+
+#include <stdio.h>
+#include <string.h>
+
+#include "gfile.h"
+#include "error.h"
+#include "options.h"
+#include "format.h"
+#include "comments.h"
+#include "protoinfo.h"
+
+#include "copyright.h"
+
+#include "VersionNum" /* CVS maintained version file */
+
+/* Keep these in step with the equivalent switches in writeheader.c - the
+   two writers are meant to produce visually consistent output. */
+#define FORMAT_PROTOTYPES
+
+/* The maximum line length that we can use */
+#define MAXLINELEN (160)
+
+/* Sanity check */
+#if LINELEN > MAXLINELEN
+#error "Oi! MAXLINELEN exists for a reason! If you increase LINELEN above it, things won't work... increase MAXLINELEN!"
+#endif
+
+static FILE *file;
+
+static const char *derror; /* D name of the error-block type */
+static const char *dregs;  /* D name of the register-block type */
+
+/* D keywords which are not C keywords, and so may legitimately appear as
+   ordinary CMHG-supplied identifiers (a command name, a handler name, an
+   error name, ...). Renamed by appending '_' if encountered - the common
+   binding-generator convention. Deliberately excludes any word which is
+   ALSO a C keyword (eg 'static', 'extern', 'default'), since CMHG's own
+   syntax already forbids those as identifiers. Keep in step with the
+   equivalent list in c-header-to-di.pl. */
+static const char *d_keyword_clashes[] = {
+  "in", "out", "inout", "ref", "lazy", "body", "version", "debug", "scope",
+  "delegate", "module", "import", "package", "align", "asm", "assert",
+  "export", "final", "immutable", "interface", "invariant", "mixin", "new",
+  "override", "pragma", "private", "protected", "public", "pure", "shared",
+  "super", "synchronized", "template", "this", "throw", "try", "typeid",
+  "typeof", "unittest", "with", "nothrow", "deprecated", "alias",
+  NULL
+};
+
+/*************************************************** Gerph *********
+ Function:     d_safe_name
+ Description:  Return an identifier safe to use in D, renaming it if
+               it clashes with a D-only keyword.
+ Parameters:   name-> the identifier as supplied to CMHG
+ Returns:      pointer to the identifier to use; either name
+               unchanged, or a static buffer safe until called again
+ ******************************************************************/
+static const char *d_safe_name(const char *name)
+{
+  static char buffer[MAXLINELEN];
+  int i;
+
+  if (name == NULL)
+    return NULL;
+
+  for (i=0; d_keyword_clashes[i] != NULL; i++)
+  {
+    if (strcmp(name, d_keyword_clashes[i]) == 0)
+    {
+      sprintf(buffer, "%s_", name);
+      return buffer;
+    }
+  }
+  return name;
+}
+
+/*************************************************** Gerph *********
+ Function:     d_module_name
+ Description:  Turn a module title into a valid D module identifier
+               (lower-cased, invalid characters replaced with '_').
+ Parameters:   title-> the title to convert
+ Returns:      pointer to static string, assumed to be safe until
+               called again
+ ******************************************************************/
+static const char *d_module_name(const char *title)
+{
+  static char buffer[MAXLINELEN];
+  size_t i, len;
+
+  len = strlen(title);
+  if (len >= sizeof(buffer) - 1)
+    len = sizeof(buffer) - 2;
+
+  for (i=0; i<len; i++)
+  {
+    char c = title[i];
+    if (c>='A' && c<='Z')
+      buffer[i] = (char)(c - 'A' + 'a');
+    else if ((c>='a' && c<='z') || (c>='0' && c<='9') || c=='_')
+      buffer[i] = c;
+    else
+      buffer[i] = '_';
+  }
+  buffer[len] = '\0';
+
+  if (len==0 || (buffer[0]>='0' && buffer[0]<='9'))
+  {
+    memmove(buffer+1, buffer, len+1);
+    buffer[0] = '_';
+  }
+
+  return buffer;
+}
+
+/*************************************************** Gerph *********
+ Function:     header_type_d
+ Description:  Return a pointer to the D spelling of a type named in
+               C syntax (as used throughout protoinfo.h), as specified
+               in the command string. For example:
+                 'void'          -> 'void '
+                 'void *'        -> 'void *'
+                 'const char *'  -> 'const(char) *'
+                 '%error%'       -> the D error type, in a similar
+                                    form to the above
+               protoinfo.h only ever uses a small, fixed vocabulary of
+               C type spellings (see writeheader.c's own header_type()),
+               so unrecognised input is a programmer error, not
+               something to guess at.
+ Parameters:   type-> the typename we're processing
+ Returns:      pointer to static string, assumed to be safe until
+               called again
+ ******************************************************************/
+static const char *header_type_d(const char *type)
+{
+  static char ourtype[MAXLINELEN];
+
+  if (*type=='%')
+  {
+    if (strcmp(type,"%error%")==0)
+    {
+      sprintf(ourtype,"%s *",derror);
+      return ourtype;
+    }
+    if (strcmp(type,"%regs%")==0)
+    {
+      sprintf(ourtype,"%s *",dregs);
+      return ourtype;
+    }
+    ErrorFatal("Programmer confusion error (magic return type %s unknown)\n",type);
+  }
+
+  if (strcmp(type, "extern void")==0)
+    return "void ";
+  if (strcmp(type, "const char *")==0)
+    return "const(char) *";
+  if (strcmp(type, "void *")==0)
+    return "void *";
+  if (strcmp(type, "char *")==0)
+    return "char *";
+  if (strcmp(type, "void")==0)
+    return "void ";
+  if (strcmp(type, "int")==0)
+    return "int ";
+  if (strcmp(type, "vectortrap_f")==0)
+    return "vectortrap_f ";
+
+  ErrorFatal("Programmer confusion error (don't know how to translate C type '%s' to D)\n",type);
+  return NULL; /* Not reached */
+}
+
+/*************************************************** Gerph *********
+ Function:     prototype_function_d
+ Description:  Helper function that just writes the D prototype for
+               the function
+ Parameters:   header-> the prototype definition to write out
+ Returns:      none
+ ******************************************************************/
+static void prototype_function_d(prototypedef_t *header)
+{
+  int arg;
+  int indent;
+  int pos;
+  const char *name = d_safe_name(header->name);
+
+  indent = fprintf(file, "extern(C) %s%s(", header_type_d(header->returntype),
+                                            name);
+  pos = indent;
+  for (arg=0; arg<MAXARGS && header->param[arg].type!=NULL; arg++)
+  {
+    const char *type = header_type_d(header->param[arg].type);
+    const char *pname = d_safe_name(header->param[arg].name);
+    char namebuf[MAXLINELEN];
+    char typebuf[MAXLINELEN];
+    const char *bracket = strchr(pname, '[');
+
+    /* A C parameter declared with an array suffix (eg 'r[4]', 'argv[]')
+       always decays to a pointer in the calling convention; D has no
+       such decay, so fold the '[...]' into an extra pointer on the type
+       rather than declaring a D static array parameter. */
+    if (bracket != NULL)
+    {
+      size_t namelen = (size_t)(bracket - pname);
+      memcpy(namebuf, pname, namelen);
+      namebuf[namelen] = '\0';
+      sprintf(typebuf, "%s*", type);
+      pname = namebuf;
+      type = typebuf;
+    }
+
+    if (arg!=0)
+    {
+#ifdef FORMAT_PROTOTYPES
+      if (pos + strlen(type) + strlen(pname) + 2 < LINELEN)
+        pos += fprintf(file,", ");
+      else
+#endif
+      {
+        int c;
+        fprintf(file,",\n");
+        for (c=indent; c>0; c--)
+          fputc(' ',file);
+        pos=indent;
+      }
+    }
+    pos += fprintf(file,"%s%s", type, pname);
+  }
+  fprintf(file,");\n");
+}
+
+/*************************************************** Gerph *********
+ Function:     prototype_write_d
+ Description:  Write a D function prototype, based on the description
+               specified.
+ Parameters:   header-> the prototype definition to write out
+ Returns:      none
+ Note:         If header->name == NULL no prototype will be written
+               If header->description == NULL no comment will be
+                 written
+ ******************************************************************/
+static void prototype_write_d(prototypedef_t *header)
+{
+  int longest_argname=0;
+  int arg;
+
+  if (header->description)
+  {
+    /* Header the declaration */
+    fprintf(file,"\n");
+    fprintf(file,"/*");
+    { int c=2; while (c<LINELEN) { fputc('*',file); c++; } }
+    fprintf(file,"\n");
+
+    if (header->name)
+      format_wrap(file," * Function:     ",
+                       " *               ", d_safe_name(header->name),
+                       "");
+    format_wrap(file," * Description:  ",
+                     " *               ", header->description,
+                     "");
+
+    for (arg=0; arg<MAXARGS && header->param[arg].type!=NULL; arg++)
+      if (strlen(header->param[arg].name) > longest_argname)
+        longest_argname = strlen(header->param[arg].name);
+    if (longest_argname != 0 ||
+        header->exit ||
+        header->note)
+    {
+
+      for (arg=0; arg<MAXARGS && header->param[arg].type!=NULL; arg++)
+      {
+        char lead1[MAXLINELEN]; /* First line leader */
+        char lead2[MAXLINELEN]; /* Subsequent line leaders */
+
+        if (arg==0)
+          sprintf(lead1," * Parameters:   %-*s = ",longest_argname,
+                                            header->param[arg].name);
+        else
+          sprintf(lead1," *               %-*s = ",longest_argname,
+                                            header->param[arg].name);
+        sprintf(lead2," *               %-*s   ",longest_argname,"");
+        format_wrap(file,lead1,lead2,header->param[arg].meaning,"");
+      }
+      if (header->exit)
+        format_wrap(file," * On exit:      ",
+                         " *               ", header->exit,
+                         "");
+      if (header->note)
+        format_wrap(file," * Note:         ",
+                         " *               ", header->note,
+                         "");
+
+      }
+    fprintf(file," ");
+    { int c=3; while (c<LINELEN) { fputc('*',file); c++; } }
+    fprintf(file, "*/\n");
+  }
+
+  /* Prototype */
+  if (header->name)
+    prototype_function_d(header);
+
+  if (header->description && header->name)
+    fprintf(file, "\n");
+}
+
+static void mainp_d(void) {
+
+  prototypedef_t header = ProtoInfo_Main();
+
+  prototype_write_d(&header);
+}
+
+static void init_d(void) {
+
+  prototypedef_t header = ProtoInfo_Init();
+
+  prototype_write_d(&header);
+}
+
+static void fin_d(void) {
+
+  prototypedef_t header = ProtoInfo_Fin();
+
+  prototype_write_d(&header);
+}
+
+static void service_d(void) {
+
+  prototypedef_t header = ProtoInfo_Service();
+
+  prototype_write_d(&header);
+}
+
+static void commands_d(void) {
+
+  prototypedef_t header_text = ProtoInfo_CommandsText();
+  prototypedef_t header_proto;
+  help_list l;
+  int n = 0;
+
+  prototype_write_d(&header_text);
+
+  if (opt.helpfn)
+  {
+    header_proto = ProtoInfo_CommandsProto(opt.helpfn);
+    prototype_write_d(&header_proto);
+  }
+  if (opt.command_codesupplied)
+  {
+    l = opt.commands;
+    while (l) {
+      if (l->handler)
+      {
+        header_proto = ProtoInfo_CommandsProto(l->handler);
+        prototype_write_d(&header_proto);
+      }
+      l=l->next;
+      n++;
+    }
+  }
+
+  /* help_PRINT_BUFFER's C form '#define help_PRINT_BUFFER ((error *)
+     arg_string)' relies on capturing the caller's own 'arg_string'
+     parameter by name - D has no equivalent textual-macro capture, so
+     this becomes a small function taking arg_string explicitly; callers
+     write 'return help_PRINT_BUFFER(arg_string);' rather than
+     'return help_PRINT_BUFFER;'. */
+  fprintf(file, "pragma(inline, true) %s* help_PRINT_BUFFER(void *arg_string) "
+                "{ return cast(%s*) arg_string; }\n", derror, derror);
+  fprintf(file, "enum char* arg_CONFIGURE_SYNTAX = null;\n");
+  fprintf(file, "enum char* arg_STATUS = cast(char*) 1;\n");
+  fprintf(file, "enum %s* configure_BAD_OPTION = cast(%s*) -1;\n", derror, derror);
+  fprintf(file, "enum %s* configure_NUMBER_NEEDED = cast(%s*) 1;\n", derror, derror);
+  fprintf(file, "enum %s* configure_TOO_LARGE = cast(%s*) 2;\n", derror, derror);
+  fprintf(file, "enum %s* configure_TOO_MANY_PARAMS = cast(%s*) 3;\n\n", derror, derror);
+
+  c_comment(file, "Command numbers, as passed to the command handler "
+                  "functions (see above)");
+  l = opt.commands;
+  n = 0;
+  while (l) {
+    if (!l->no_handler)
+    {
+      fprintf(file, "enum CMD_%s = %d;\n", l->name, n);
+      n++;
+    }
+    l=l->next;
+  }
+  fprintf(file, "\n");
+}
+
+static void swi_handler_d(void) {
+
+  prototypedef_t header_text = ProtoInfo_SwiHandlerText();
+
+  swi_list l;
+  char *prefix=opt.swi_names->name;
+  int swi=opt.swi_base;
+
+  prototypedef_t header_proto;
+
+  prototype_write_d(&header_text);
+
+  if (opt.swi_handler)
+  {
+    c_comment(file, "Function called to handle SWI calls");
+    header_proto = ProtoInfo_SwiHandlerProto(opt.swi_handler);
+    prototype_write_d(&header_proto);
+  }
+  if (opt.swi_codesupplied)
+  {
+    l=opt.swi_names->next; /* Must be valid to get to here */
+    c_comment(file, "Functions called to handle particular SWI calls");
+    while (l)
+    {
+      if (l->handler)
+      {
+        header_proto = ProtoInfo_SwiHandlerProto(l->handler);
+        prototype_write_d(&header_proto);
+      }
+      l=l->next;
+    }
+  }
+
+  /* SWI number definitions */
+  c_comment(file, "SWI number definitions");
+
+  fprintf(file, "enum %s_00 = 0x%08x;\n", prefix, swi);
+
+  l = opt.swi_names;
+  if (l)
+    l = l->next;
+  while (l) {
+    char *name=l->name;
+    fprintf(file, "enum %s_%s = 0x%08x;\n", prefix, name, swi);
+    fprintf(file, "enum X%s_%s = 0x%08x;\n", prefix, name, swi+(1<<17));
+    swi++;
+    l=l->next;
+  }
+  fprintf(file, "\n");
+  c_comment(file, "Special error for 'SWI values out of range for "
+                  "this module'");
+  fprintf(file, "enum %s* error_BAD_SWI = cast(%s*) -1;\n", derror, derror);
+  fprintf(file, "\n");
+}
+
+static void swi_decoder_d(void) {
+
+  if (opt.swi_decoder->handler) {
+
+    prototypedef_t header_nametonumber =
+        ProtoInfo_SwiDecoderNameToNumber(opt.swi_decoder->name);
+    prototypedef_t header_numbertoname =
+        ProtoInfo_SwiDecoderNumberToName(opt.swi_decoder->handler);
+
+    prototype_write_d(&header_nametonumber);
+    prototype_write_d(&header_numbertoname);
+
+  } else {
+
+    prototypedef_t header = ProtoInfo_SwiDecoderCombined(opt.swi_decoder->name);
+
+    prototype_write_d(&header);
+  }
+}
+
+static void event_handler_d(void) {
+
+  prototypedef_t header_entry = ProtoInfo_EventEntry(opt.events->name);
+  prototypedef_t header_handler = ProtoInfo_EventHandler(
+      ProtoInfo_HandlerName(opt.events->name, opt.events->handler));
+
+  prototype_write_d(&header_entry);
+  prototype_write_d(&header_handler);
+}
+
+static void handlers_d(handler_list head, const char *type, rettype rtype) {
+
+  int carry_used = 0;
+  int error_used = 0;
+  int is_irq = (head == opt.irqs);
+  handler_list h = head;
+
+  if (rtype==ret_errspecial)
+  {
+    c_comment(file, "vectortrap_f is a function which we call to process "
+                    "the remainder of the vector chain.");
+    fprintf(file,"alias vectortrap_f = %s* function(%s* regs, void* trappw);\n",
+                 derror,dregs);
+  }
+
+  if (!h)
+    return; /* Nothing to do */
+
+  while (h) {
+
+    prototypedef_t header_entry = ProtoInfo_HandlerEntry(h->name, h->private_word);
+    prototypedef_t header_handler = ProtoInfo_HandlerHandler(type, rtype,
+        ProtoInfo_HandlerName(h->name, h->handler),
+        h->error_capable, is_irq);
+
+    if (h->carry_capable)
+      carry_used = 1;
+    if (h->error_capable)
+      error_used = 1;
+
+    prototype_write_d(&header_entry);
+    prototype_write_d(&header_handler);
+
+    h = h->next;
+  }
+  if (rtype==ret_errspecial)
+  {
+    c_comment(file, "VECTORTRAP_PASSON should *only* be used to pass "
+                    "through calls which you have no interest in "
+                    "whatsoever. It is available as an optimisation "
+                    "over calling the trap function as a return "
+                    "parameter.");
+    fprintf(file,"enum %s* VECTORTRAP_PASSON = cast(%s*) 1;\n\n", derror, derror);
+  }
+
+  if (rtype==ret_err && carry_used)
+  {
+    c_comment(file, "VENEER_SETCARRY can be returned from routines which "
+                    "have been marked as capable of having a carry flag "
+                    "returned to return with the carry flag set. All other "
+                    "registers are preserved. D is only supported on "
+                    "RISC OS 64-bit, where this is not supported, and "
+                    "will return with no error.");
+    fprintf(file,"enum %s* VENEER_SETCARRY = cast(%s*) 0;\n\n", derror, derror);
+  }
+
+  {
+    static int wrote_vectors = 0;
+    /* We don't write out on IRQs because a) they're deprecated and
+                                          b) it makes a mess of the way
+                                             that we handle it */
+    if (rtype==ret_int && !wrote_vectors && head != opt.irqs)
+    {
+      wrote_vectors = 1;
+      c_comment(file, "VECTOR_PASSON can be returned from vectors to pass "
+                      "the call on to other handlers.");
+      fprintf(file,"enum VECTOR_PASSON = 1;\n");
+      c_comment(file, "VECTOR_CLAIM can be returned from vectors to claim "
+                      "the vector and return with the updated register "
+                      "block.");
+      fprintf(file,"enum VECTOR_CLAIM = 0;\n\n");
+      if (error_used)
+      {
+        c_comment(file, "VECTOR_ERROR(err) can be returned from routines which "
+                        "have been marked as capable of having an error returned "
+                        "as well as claiming the call. All other registers "
+                        "are preserved if the error pointer is not NULL.");
+        fprintf(file,"pragma(inline, true) int VECTOR_ERROR(%s* err) "
+                      "{ return cast(int) err; }\n\n", derror);
+      }
+    }
+  }
+}
+
+static void errors_d(void) {
+
+  int errnum=opt.error_base;
+
+  if (errnum)
+  {
+    c_comment(file, "Error base for this module");
+    fprintf(file, "enum ERROR_BASE = 0x%08x;\n", errnum);
+  }
+
+  if (opt.errors)
+  {
+    error_list l=opt.errors;
+
+    /* D is only supported on RISC OS 64-bit, so (unlike the C header)
+       there is no need to choose between the GCC/Norcroft proxy-cast
+       tricks the 32-bit builds require here - the error blocks are
+       always directly addressable data. */
+    fprintf(file,"/* Error messages embedded in the module header, based at &%x */\n",errnum);
+
+    while (l)
+    {
+      int num;
+      if (l->number)
+        num=l->number;
+      else
+        num=errnum++;
+      fprintf(file,"extern(C) extern __gshared %s __err_%s; /* &%x */\n",derror,l->name,num);
+      l = l->next;
+    }
+    fprintf(file,"\n");
+
+    l=opt.errors;
+    while (l)
+    {
+      /* '%s (&__err_%s)' in C is a value-like macro; D has no equivalent
+         that stays a bare identifier at the use site, so this becomes a
+         zero-argument function instead - callers write 'NAME()' rather
+         than 'NAME'. */
+      fprintf(file,"pragma(inline, true) %s* %s() { return &__err_%s; }\n",
+              derror, d_safe_name(l->name), l->name);
+      l = l->next;
+    }
+    fprintf(file,"\n");
+  }
+  fprintf(file,"\n");
+}
+
+void WriteHeaderD(void) {
+
+  if (!opt.x_d)
+    return;
+
+  derror = (opt.oslib) ? "os_error" : "_kernel_oserror";
+  dregs  = (opt.oslib) ? "os_register_block" : "_kernel_swi_regs";
+
+  file = file_write(opt.x_d, remove_onfail);
+
+  if (file == NULL)
+    ErrorFatal("Couldn't create D interface file: %s", opt.x_d);
+
+  c_comment(file,"Generated by CMunge " Module_FullVersionAndDate "\n"
+                 "CMunge " Copyright_CMunge);
+  fprintf(file, "\n");
+
+  {
+    char *name = opt.title;
+    if (name==NULL || *name=='\0')
+    {
+      name = strrchr(opt.infile,'.');
+      if (name==NULL)
+        name="anonymous";
+      else
+        name++;
+    }
+    fprintf(file, "module %s;\n\n", d_module_name(name));
+  }
+
+  if (opt.oslib == 0)
+    fprintf(file, "import kernel;\n\n");
+  else
+    fprintf(file, "import oslib.os;\n\n");
+
+  fprintf(file, "enum CMUNGE_VERSION = %i;\n",Module_Version);
+  fprintf(file, "enum CMHG_VERSION = 531; /* Nearest equivalent version */\n\n");
+
+  if (!opt.mode_errors)
+  {
+    fprintf(file, "enum Module_Title = \"%s\";\n", opt.title);
+    {
+      char *str = opt.help;
+      fprintf(file, "enum Module_Help = \"");
+      while (*str!='\0' && *str!='\t')
+      {
+        fputc(*str, file);
+        str++;
+      }
+      fprintf(file, "\";\n");
+    }
+    fprintf(file, "enum Module_VersionString = \"%d.%02d\";\n", opt.version/100, opt.version%100);
+    fprintf(file, "enum Module_VersionNumber = %d;\n", opt.version);
+    fprintf(file, "enum Module_Date = \"%s\";\n", opt.date);
+
+    if (opt.mfile)
+      fprintf(file, "enum Module_MessagesFile = \"%s\";\n", opt.mfile);
+  }
+
+  fprintf(file, "\n");
+
+  if (opt.base)
+    fprintf(file, "extern(C) extern __gshared int Image__RO_Base;\n\n");
+
+  if (opt.runnable == run_clib)
+    mainp_d();
+  if (opt.init)
+    init_d();
+  if (opt.final)
+    fin_d();
+  if (opt.service)
+    service_d();
+  if (opt.helpfn || opt.command_codesupplied)
+    commands_d();
+  if (opt.swi_handler || opt.swi_codesupplied)
+    swi_handler_d();
+  if (opt.swi_decoder)
+    swi_decoder_d();
+  if (opt.events)
+    event_handler_d();
+  if (opt.irqs)
+    handlers_d(opt.irqs, "IRQ", ret_int);
+  if (opt.generics)
+    handlers_d(opt.generics, "Generic", ret_err);
+  if (opt.vectors)
+    handlers_d(opt.vectors, "Vector", ret_int);
+  if (opt.vector_traps)
+    handlers_d(opt.vector_traps, "Vector traps", ret_errspecial);
+  if (opt.error_base || opt.errors)
+    errors_d();
+
+  file_close(file);
+}

@@ -161,6 +161,7 @@ typedef struct {
   char         *hfile;		/* the C header */
   char         *x_hdr;		/* the assembler SWI header */
   char         *x_h;		/* the C SWI header */
+  char         *x_d;		/* the D interface (.di) header */
   char         *mfile;		/* Message file */
   char         *dfile;		/* Depend file */
 

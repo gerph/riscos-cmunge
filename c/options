@@ -68,6 +68,7 @@ void Options_Init(void) {
   /* Export files */
   opt.x_hdr       = NULL;
   opt.x_h         = NULL;
+  opt.x_d         = NULL;
   opt.apcs        = DEFAULT_APCS;
   opt.toolchain   = tc_norcroft;
   opt.apcs_used   = 0;
@@ -96,6 +97,7 @@ static void help_text(void) {
 "\t-d <file>     \bName a C header file that CMunge will generate.\n"
 "\t-xhdr <file>  \bName a Assembler SWI header file that CMunge will generate.\n"
 "\t-xh <file>    \bName a C SWI header file that CMunge will generate.\n"
+"\t-xd <file>    \bName a D interface (.di) file that CMunge will generate.\n"
 "\t-p            \bPre-process the file with pre-processor before parsing.\n"
 "\t-px           \bExtended pre-processing of all content from pre-processor.\n"
 /*"-b            \bUse _blib_entermodule instead of SCL version\n" */
@@ -156,6 +158,8 @@ void Options_CL(int argc, char *argv[]) {
         file=&opt.x_hdr;
       } else if (stricmp("h", arg)) {
         file=&opt.x_h;
+      } else if (stricmp("d", arg)) {
+        file=&opt.x_d;
       }
       if (file==NULL)
         ErrorFatal("Export flag %s not known!",arg);
@@ -342,6 +346,8 @@ void Options_CheckSanity(void) {
       CMHGWarning("-xhdr specified");
     if (opt.x_h)
       CMHGWarning("-xh specified");
+    if (opt.x_d)
+      CMHGWarning("-xd specified");
     if (opt.oslib)
       CMHGWarning("-zoslib specified");
     if (opt.mode_errors)
@@ -377,7 +383,7 @@ void Options_CheckSanity(void) {
   if (!opt.blank)
   {
     if ((opt.ofile == NULL) && (opt.sfile == NULL) && (opt.hfile == NULL) &&
-        (opt.x_hdr == NULL) && (opt.x_h == NULL))
+        (opt.x_hdr == NULL) && (opt.x_h == NULL) && (opt.x_d == NULL))
       ErrorFatal("No output file specified!");
   }
   else

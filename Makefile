@@ -15,12 +15,14 @@ OBJS       = \
         o.main          \
         o.mem           \
         o.options       \
+        o.protoinfo     \
         o.readfile      \
         o.str           \
         o.system        \
         o.gfile         \
         o.throwback     \
         o.writeheader   \
+        o.writeheaderd  \
         o.writeexport   \
         o.writefile     \
         o.blank

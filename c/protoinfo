@@ -1,0 +1,670 @@
+/*
+ * Copyright (C) 1999-2025 Robin Watts/Justin Fletcher
+ */
+
+#include <stdio.h>
+#include <string.h>
+
+#include "error.h"
+#include "options.h"
+#include "protoinfo.h"
+
+/* The maximum line length we use for a computed name/description/note -
+   matches the buffer size language renderers use for computed type text. */
+#define MAXLINELEN (160)
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_Main
+ Description:  Describe the 'main' entry point, used when the module
+               is entered by OS_Module 2.
+ Parameters:   none
+ Returns:      the prototype description
+ ******************************************************************/
+prototypedef_t ProtoInfo_Main(void)
+{
+  static prototypedef_t header =
+  {
+    "main",
+    "int",
+    "Module entry point when entered by OS_Module 2. We are in user mode and "
+    "will be using user mode stack in application space. If you're going to "
+    "be a module task, then you will need to claim Service_Memory.",
+    NULL, /* No note */
+    { /* Entry parameters */
+      {
+        "int",
+        "argc",
+        "Count of the number of arguments passed to the module in R2 when "
+        "OS_Module 2 issued." },
+      {
+        "char *",
+        "argv[]",
+        "array of pointers to strings passed as arguments to the module" }
+    },
+    "Return EXIT_SUCCESS for successful completion, or EXIT_FAILURE (or "
+    "some other non-zero value for failure."
+  };
+
+  return header;
+}
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_Init
+ Description:  Describe the module initialisation entry point.
+ Parameters:   none
+ Returns:      the prototype description, with the name filled in from
+               opt.init
+ ******************************************************************/
+prototypedef_t ProtoInfo_Init(void)
+{
+  static prototypedef_t header =
+  {
+    NULL, /* Function name is filled in */
+    "%error%",
+    "Initialise the module, setting up vectors, callbacks and any other "
+    "parts of the system necessary for the module to function.",
+    NULL, /* No note */
+    { /* Entry parameters */
+      {
+        "const char *",
+        "tail",
+        "pointer to command line (control terminated)" },
+      {
+        "int",
+        "podule_base",
+        "address of podule module was started from, or NULL if none" },
+      {
+        "void *",
+        "pw",
+        "private word for module" },
+    },
+    "Return NULL for successful initialisation, or a pointer to an "
+    "error block if the module could not start properly."
+  };
+  header.name = opt.init;
+
+  return header;
+}
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_Fin
+ Description:  Describe the module finalisation entry point.
+ Parameters:   none
+ Returns:      the prototype description, with the name filled in from
+               opt.final
+ ******************************************************************/
+prototypedef_t ProtoInfo_Fin(void)
+{
+  static prototypedef_t header =
+  {
+    NULL, /* Function name is filled in */
+    "%error%",
+    "Finalise the module, shutting down any systems necessary, "
+    "freeing vectors and releasing workspace",
+    NULL, /* No note */
+    { /* Entry parameters */
+      {
+        "int",
+        "fatal",
+        "fatality indicator; 1 if fatal, 0 if reinitialising" },
+      {
+        "int",
+        "podule_base",
+        "address of podule module was started from, or NULL if none" },
+      {
+        "void *",
+        "pw",
+        "private word for module" },
+    },
+    "Return 0 for successful finalisation, or a pointer to an error block "
+    "if module was not shutdown properly."
+  };
+  header.name = opt.final;
+
+  return header;
+}
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_Service
+ Description:  Describe the service call handler entry point.
+ Parameters:   none
+ Returns:      the prototype description, with the name filled in from
+               opt.service
+ ******************************************************************/
+prototypedef_t ProtoInfo_Service(void)
+{
+  static prototypedef_t header =
+  {
+    NULL, /* Function name is filled in */
+    "void",
+    "Service call handler routine. All services which are being received "
+    "by the module will be passed to this routine.",
+    NULL, /* No note */
+    { /* Entry parameters */
+      {
+        "int",
+        "service",
+        "service call number" },
+      {
+        "%regs%",
+        "r",
+        "pointer to register block on entry" },
+      {
+        "void *",
+        "pw",
+        "private word for module" },
+    },
+    "Update register values on return by updating r."
+  };
+  header.name = opt.service;
+
+  return header;
+}
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_CommandsText
+ Description:  Describe the star command/help handler routines in
+               general (used for the descriptive comment written
+               before the individual prototypes).
+ Parameters:   none
+ Returns:      the prototype description
+ ******************************************************************/
+prototypedef_t ProtoInfo_CommandsText(void)
+{
+  static prototypedef_t header_text =
+  {
+    NULL, /* No function name; we just want the description here */
+    "%error%",
+    "Star command and help request handler routines.",
+    NULL, /* No note */
+    { /* Entry parameters */
+      {
+        "const char *",
+        "arg_string",
+        "pointer to argument string (control terminated), or output buffer" },
+      {
+        "int",
+        "argc",
+        "number of arguments passed" },
+      {
+        "int",
+        "number",
+        "command number (see CMD_* definitions below)" },
+      {
+        "void *",
+        "pw",
+        "private word for module" },
+    },
+    "If number indicates a help entry:\n"
+    "\tTo output, assemble zero terminated output into arg_string, "
+    "and return help_PRINT_BUFFER to print it.\n"
+    "\tTo stay silent, return NULL.\n"
+    "\tTo given an error, return an error pointer.\n"
+    "\t[In this case, you need to cast the 'const' away]\n"
+    "If number indicates a configure option:\n"
+    "\tIf arg_string is arg_STATUS, then print status, otherwise use "
+    "argc and arg_string to set option.\n"
+    "\tReturn NULL for no error.\n"
+    "\tReturn one of the four error codes below (configure_*) for a "
+    "generic error message.\n"
+    "\tReturn an error pointer for a custom error.\n"
+    "If number indicates a command entry:\n"
+    "\tExecute the command given by number, and arg_string.\n"
+    "\tReturn NULL on success,\n"
+    "\tReturn a pointer to an error block on failure."
+  };
+
+  return header_text;
+}
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_CommandsProto
+ Description:  Describe an individual command/help handler function.
+ Parameters:   name-> the function name to use
+ Returns:      the prototype description, undocumented (the
+               description is only written once, by
+               ProtoInfo_CommandsText)
+ ******************************************************************/
+prototypedef_t ProtoInfo_CommandsProto(char *name)
+{
+  prototypedef_t header_proto = ProtoInfo_CommandsText();
+  header_proto.description = NULL;
+  header_proto.name = name;
+
+  return header_proto;
+}
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_SwiHandlerText
+ Description:  Describe the SWI handler routines in general (used for
+               the descriptive comment written before the individual
+               prototypes).
+ Parameters:   none
+ Returns:      the prototype description
+ ******************************************************************/
+prototypedef_t ProtoInfo_SwiHandlerText(void)
+{
+  static prototypedef_t header_text =
+  {
+    NULL, /* Function name is filled in */
+    "%error%",
+    "SWI handler routine. All SWIs for this module will be passed "
+    "to these routines.",
+    NULL, /* No note */
+    { /* Entry parameters */
+      {
+        "int",
+        "number",
+        "SWI number within SWI chunk (i.e. 0 to 63)" },
+      {
+        "%regs%",
+        "r",
+        "pointer to register block on entry" },
+      {
+        "void *",
+        "pw",
+        "private word for module" },
+    },
+    "Return NULL if SWI handled successfully, setting return register "
+    "values (r0-r9) in r.\n"
+    "Return error_BAD_SWI for out of range SWIs.\n"
+    "Return an error block for a custom error."
+  };
+
+  return header_text;
+}
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_SwiHandlerProto
+ Description:  Describe an individual SWI handler function.
+ Parameters:   name-> the function name to use
+ Returns:      the prototype description, undocumented (the
+               description is only written once, by
+               ProtoInfo_SwiHandlerText)
+ ******************************************************************/
+prototypedef_t ProtoInfo_SwiHandlerProto(char *name)
+{
+  prototypedef_t header_proto = ProtoInfo_SwiHandlerText();
+  header_proto.description = NULL;
+  header_proto.name = name;
+
+  return header_proto;
+}
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_SwiDecoderNameToNumber
+ Description:  Describe the SWI name-to-number decoding handler.
+ Parameters:   name-> the function name to use
+ Returns:      the prototype description
+ ******************************************************************/
+prototypedef_t ProtoInfo_SwiDecoderNameToNumber(char *name)
+{
+  static prototypedef_t header_nametonumber =
+  {
+    NULL, /* Function name is filled in */
+    "int",
+    "SWI name to number decoding handler.",
+    NULL, /* No note */
+    { /* Entry parameters */
+      {
+        "const char *",
+        "string",
+        "pointer to string to decode (control char terminated)" },
+      {
+        "void *",
+        "pw",
+        "private word for module" },
+    },
+    "If you recognise the string, return the offset within "
+    "the SWI chunk (i.e. 0 to 63).\n"
+    "Otherwise return < 0"
+  };
+  header_nametonumber.name = name;
+
+  return header_nametonumber;
+}
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_SwiDecoderNumberToName
+ Description:  Describe the SWI number-to-name decoding handler.
+ Parameters:   name-> the function name to use
+ Returns:      the prototype description
+ ******************************************************************/
+prototypedef_t ProtoInfo_SwiDecoderNumberToName(char *name)
+{
+  static prototypedef_t header_numbertoname =
+  {
+    NULL, /* Function name is filled in */
+    "int",
+    "SWI number to name decoding handler.",
+    NULL, /* No note */
+    { /* Entry parameters */
+      {
+        "int",
+        "number",
+        "offset within SWI chunk (0 to 63)" },
+      {
+        "char *",
+        "string",
+        "pointer to output buffer" },
+      {
+        "int",
+        "offset",
+        "offset within buffer to start writing" },
+      {
+        "int",
+        "size",
+        "size of the output buffer" },
+      {
+        "void *",
+        "pw",
+        "private word for module" },
+    },
+    "If the SWI number is recognised, write the SWI name into "
+    "the buffer at the correct offset. Do not terminate the string; "
+    "return the offset to next free char.\n"
+    "If the SWI is unrecognised, return offset unchanged."
+  };
+  header_numbertoname.name = name;
+
+  return header_numbertoname;
+}
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_SwiDecoderCombined
+ Description:  Describe the combined SWI number/name decoding handler,
+               used when no separate encode/decode routines were
+               given.
+ Parameters:   name-> the function name to use
+ Returns:      the prototype description
+ ******************************************************************/
+prototypedef_t ProtoInfo_SwiDecoderCombined(char *name)
+{
+  static prototypedef_t header =
+  {
+    NULL, /* Function name is filled in */
+    "int",
+    "SWI number/name decoding handler.",
+    NULL, /* No note */
+    { /* Entry parameters */
+      {
+        "int",
+        "r[4]",
+        "If r[0] < 0 then :\n"
+        "\tr[1] points to a control terminatated string which you should "
+        "convert to a number.\n"
+        "\tIf you recognise the name, set r[0] to the offset within the SWI "
+        "chunk.\n"
+        "\tIf you do not recognise the name, set r[0] < 0.\n"
+        "If r[0] >= 0 then :\n"
+        "\tr[0] = offset within the SWI block\n"
+        "\tr[1] = pointer to an output buffer\n"
+        "\tr[2] = offset within buffer to fill from\n"
+        "\tr[3] = pointer to byte beyond the end of the buffer\n"
+        "\tIf the offset is recognised, fill the buffer from the required "
+        "point (updating, r[2], without a terminator), and return NULL."
+        "\tIf the offset is not recognised, return an error pointer.\n" },
+      {
+        "void *",
+        "pw",
+        "private word for module" },
+    },
+    "As defined above."
+  };
+  header.name = name;
+
+  return header;
+}
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_EventEntry
+ Description:  Describe an event handler's entry point symbol (not a
+               callable C/D function; a label used with
+               OS_Claim/OS_Release).
+ Parameters:   name-> the symbol name to use
+ Returns:      the prototype description
+ ******************************************************************/
+prototypedef_t ProtoInfo_EventEntry(char *name)
+{
+  static prototypedef_t header_entry =
+  {
+    NULL, /* Function name is filled in */
+    "extern void",
+    "Symbol for entry point to module - NOT a C function.\n"
+    "This name should be used as an argument to OS_Claim/OS_Release as "
+    "required, but should never be called from C.",
+    NULL, /* No note */
+    { { NULL } }, /* NO Entry parameters */
+    NULL
+  };
+  header_entry.name = name;
+
+  return header_entry;
+}
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_EventHandler
+ Description:  Describe an event handler routine.
+ Parameters:   name-> the function name to use
+ Returns:      the prototype description
+ ******************************************************************/
+prototypedef_t ProtoInfo_EventHandler(char *name)
+{
+  static prototypedef_t header_handler =
+  {
+    NULL, /* Function name is filled in */
+    "int",
+    "Event handler routine. Events will be passed to this routine if "
+    "they are in the accept list (or all, if no list was provided).",
+    NULL, /* No note */
+    { /* Entry parameters */
+      {
+        "%regs%",
+        "r",
+        "pointer to register block on entry" },
+      {
+        "void *",
+        "pw",
+        "private word for module" },
+    },
+    "Update r to alter return values.\n"
+    "Return 0 to claim event (pulling return address from the stack).\n"
+    "Return non-0 to pass on (returning via r14)."
+  };
+  header_handler.name = name;
+
+  return header_handler;
+}
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_HandlerName
+ Description:  Compute the name to use for a handler routine, applying
+               the standard '<name>_handler' convention whenever no
+               explicit handler name was given.
+ Parameters:   name-> the entry point name (eg from a handler_list, or
+                 an event-handler's name)
+               handler-> the explicit handler name, or NULL to use
+                 the default
+ Returns:      pointer to the name to use; static storage, assumed
+               to be safe until called again
+ ******************************************************************/
+char *ProtoInfo_HandlerName(char *name, char *handler)
+{
+  static char buffer[MAXLINELEN];
+
+  if (handler)
+    return handler;
+
+  sprintf(buffer, "%s_handler", name);
+  return buffer;
+}
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_HandlerEntry
+ Description:  Describe a vector/IRQ/generic/vector-trap handler's
+               entry point symbol (not a callable C/D function; a
+               label used with OS_Claim/OS_Release).
+ Parameters:   name-> the symbol name to use
+               private_word = the register the private word is passed
+                 in, or -1 if none is used
+ Returns:      the prototype description
+ ******************************************************************/
+prototypedef_t ProtoInfo_HandlerEntry(char *name, int private_word)
+{
+  static prototypedef_t header_entry =
+  {
+    NULL, /* Function name is filled in */
+    "extern void",
+    "Symbol for entry point to module - NOT a C function.\n"
+    "This name should be used as an argument to OS_Claim/OS_Release as "
+    "required, but should never be called from C.",
+    NULL, /* Note will be updated */
+    { { NULL } }, /* NO Entry parameters */
+    NULL
+  };
+
+  if (private_word != -1)
+  {
+    if (private_word != 12)
+    {
+      static char buffer[2048]; /* matches the original writeheader.c sizing
+                                    for this particular message, which is
+                                    longer than MAXLINELEN */
+      sprintf(buffer,
+        "This entry point takes its private word in register r%i rather "
+        "than r12 as is more usually used. r12 will be preserved around "
+        "this entry point. This type of entry would be used for a callback "
+        "such as a SoundDMA linear handler.", private_word);
+      header_entry.note = buffer;
+    }
+    else
+    {
+      header_entry.note = "This entry point will preserve r12.";
+    }
+  }
+  else
+  {
+    header_entry.note = NULL;
+  }
+
+  header_entry.name = name;
+
+  return header_entry;
+}
+
+/*************************************************** Gerph *********
+ Function:     ProtoInfo_HandlerHandler
+ Description:  Describe a vector/IRQ/generic/vector-trap handler
+               routine.
+ Parameters:   type-> the kind of handler, used in the description
+                 (eg 'IRQ', 'Generic', 'Vector')
+               rtype = the return convention the handler uses
+               name-> the function name to use
+               error_capable = set if the handler is capable of
+                 claiming with VECTOR_ERROR (only meaningful for
+                 rtype == ret_err)
+               is_irq = set if this handler is on the (non-vectored)
+                 IRQ list, which uses different wording for the exit
+                 description (only meaningful for rtype == ret_int)
+ Returns:      the prototype description
+ ******************************************************************/
+prototypedef_t ProtoInfo_HandlerHandler(const char *type, rettype rtype,
+                                         char *name, int error_capable,
+                                         int is_irq)
+{
+  static prototypedef_t header_handler =
+  {
+    NULL, /* Function name is filled in */
+    NULL, /* Type will be filled in */
+    NULL, /* Description will be filled in */
+    NULL, /* No note */
+    { /* Entry parameters */
+      {
+        "%regs%",
+        "r",
+        "pointer to register block on entry" },
+      {
+        "void *",
+        "pw",
+        "private word for module" },
+    },
+    NULL /* Exit will be updated */
+  };
+
+  switch (rtype)
+  {
+    case ret_int:
+      header_handler.returntype = "int";
+      if (!is_irq)
+      {
+        header_handler.exit = "Update r to alter return values\n"
+                              "Return VECTOR_CLAIM to claim (return via stack)\n"
+                              "Return VECTOR_PASSON to pass on (return via r14)";
+      }
+      else
+      {
+        header_handler.exit = "Update r to alter return values\n"
+                              "Return 0 to claim (return via stack)\n"
+                              "Return non-0 to pass on (return via r14)";
+      }
+      break;
+
+    case ret_err:
+      header_handler.returntype = "%error%";
+      header_handler.exit = "Update r to alter return values\n"
+                            "Return NULL to return with V clear\n"
+                            "Return an error pointer to set V and r0";
+      break;
+
+    case ret_errspecial:
+      header_handler.returntype = "%error%";
+      header_handler.exit = "Update r to alter return values\n"
+                            "Return NULL to return from vector (claiming it)\n"
+                            "Return VECTORTRAP_PASSON to return pass on "
+                            "to next claimant\n"
+                            "Return error pointer to return with V set "
+                            "and error in R0";
+      break;
+
+    default:
+      ErrorFatal("Programmer confusion error (bad return type for handler)");
+      break;
+  }
+
+  if (error_capable)
+  {
+    header_handler.note =
+      "VECTOR_ERROR(error) may also be used to claim this vector, "
+      "and return with V set and R0 set to the pointer supplied.";
+  }
+  else
+  {
+    header_handler.note = NULL;
+  }
+
+  {
+    static char buffer[MAXLINELEN];
+    sprintf(buffer, "%s handler function", type);
+    header_handler.description = buffer;
+  }
+
+  if (rtype == ret_errspecial)
+  {
+    /* The function prototype for the trap routine, and the private word
+       it will take */
+    header_handler.param[2].type = "vectortrap_f";
+    header_handler.param[2].name = "trap";
+    header_handler.param[2].meaning =
+        "pointer to function to call to pass on vector";
+    header_handler.param[3].type = "void *";
+    header_handler.param[3].name = "trappw";
+    header_handler.param[3].meaning =
+        "private word to pass to trap function";
+  }
+  else
+    header_handler.param[2].type = NULL;
+
+  header_handler.name = name;
+
+  return header_handler;
+}

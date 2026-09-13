@@ -10,6 +10,7 @@
 #include "options.h"
 #include "format.h"
 #include "comments.h"
+#include "protoinfo.h"
 
 #include "copyright.h"
 
@@ -46,6 +47,9 @@
    of the restructuring, some parts of the headers will look different. This
    is unfortunate, but is unlikely to be reverted just to retain a
    particular look.
+
+   NB: writeheaderd.c (the D header writer) mirrors this same 'modern'
+   style; keep the two in step if this is ever changed.
  */
 /* #define CLASSIC_HEADERS */
 
@@ -63,24 +67,6 @@ static FILE *file;
 
 static const char *error;
 static const char *regs;
-
-typedef struct argumentpair_s {
-  char *type;    /* Variable type */
-  char *name;    /* Variable name */
-  char *meaning; /* Variable value */
-} argumentpair_t;
-
-/* Maximum number of arguments we can declare in the header descriptor */
-#define MAXARGS (5)
-
-typedef struct prototypedef_s {
-  char *name;                         /* the function name */
-  char *returntype;                   /* type of data returned */
-  char *description;                  /* function description */
-  char *note;                         /* Notes about this prototype */
-  argumentpair_t param[MAXARGS];      /* list of parameters passed in */
-  char *exit;                         /* description of return parameters */
-} prototypedef_t;
 
 /*************************************************** Gerph *********
  Function:     header_type
@@ -297,175 +283,38 @@ static void prototype_write(prototypedef_t *header)
 
 static void mainp(void) {
 
-  static prototypedef_t header =
-  {
-    "main",
-    "int",
-    "Module entry point when entered by OS_Module 2. We are in user mode and "
-    "will be using user mode stack in application space. If you're going to "
-    "be a module task, then you will need to claim Service_Memory.",
-    NULL, /* No note */
-    { /* Entry parameters */
-      {
-        "int",
-        "argc",
-        "Count of the number of arguments passed to the module in R2 when "
-        "OS_Module 2 issued." },
-      {
-        "char *",
-        "argv[]",
-        "array of pointers to strings passed as arguments to the module" }
-    },
-    "Return EXIT_SUCCESS for successful completion, or EXIT_FAILURE (or "
-    "some other non-zero value for failure."
-  };
+  prototypedef_t header = ProtoInfo_Main();
 
   prototype_write(&header);
 }
 
 static void init(void) {
 
-  static prototypedef_t header =
-  {
-    NULL, /* Function name is filled in */
-    "%error%",
-    "Initialise the module, setting up vectors, callbacks and any other "
-    "parts of the system necessary for the module to function.",
-    NULL, /* No note */
-    { /* Entry parameters */
-      {
-        "const char *",
-        "tail",
-        "pointer to command line (control terminated)" },
-      {
-        "int",
-        "podule_base",
-        "address of podule module was started from, or NULL if none" },
-      {
-        "void *",
-        "pw",
-        "private word for module" },
-    },
-    "Return NULL for successful initialisation, or a pointer to an "
-    "error block if the module could not start properly."
-  };
-  header.name=opt.init;
+  prototypedef_t header = ProtoInfo_Init();
 
   prototype_write(&header);
 }
 
 static void fin(void) {
 
-  static prototypedef_t header =
-  {
-    NULL, /* Function name is filled in */
-    "%error%",
-    "Finalise the module, shutting down any systems necessary, "
-    "freeing vectors and releasing workspace",
-    NULL, /* No note */
-    { /* Entry parameters */
-      {
-        "int",
-        "fatal",
-        "fatality indicator; 1 if fatal, 0 if reinitialising" },
-      {
-        "int",
-        "podule_base",
-        "address of podule module was started from, or NULL if none" },
-      {
-        "void *",
-        "pw",
-        "private word for module" },
-    },
-    "Return 0 for successful finalisation, or a pointer to an error block "
-    "if module was not shutdown properly."
-  };
-  header.name=opt.final;
+  prototypedef_t header = ProtoInfo_Fin();
 
   prototype_write(&header);
 }
 
 static void service(void) {
 
-  static prototypedef_t header =
-  {
-    NULL, /* Function name is filled in */
-    "void",
-    "Service call handler routine. All services which are being received "
-    "by the module will be passed to this routine.",
-    NULL, /* No note */
-    { /* Entry parameters */
-      {
-        "int",
-        "service",
-        "service call number" },
-      {
-        "%regs%",
-        "r",
-        "pointer to register block on entry" },
-      {
-        "void *",
-        "pw",
-        "private word for module" },
-    },
-    "Update register values on return by updating r."
-  };
-  header.name=opt.service;
+  prototypedef_t header = ProtoInfo_Service();
 
   prototype_write(&header);
 }
 
 static void commands(void) {
 
-  static prototypedef_t header_text =
-  {
-    NULL, /* No function name; we just want the description here */
-    "%error%",
-    "Star command and help request handler routines.",
-    NULL, /* No note */
-    { /* Entry parameters */
-      {
-        "const char *",
-        "arg_string",
-        "pointer to argument string (control terminated), or output buffer" },
-      {
-        "int",
-        "argc",
-        "number of arguments passed" },
-      {
-        "int",
-        "number",
-        "command number (see CMD_* definitions below)" },
-      {
-        "void *",
-        "pw",
-        "private word for module" },
-    },
-    "If number indicates a help entry:\n"
-    "\tTo output, assemble zero terminated output into arg_string, "
-    "and return help_PRINT_BUFFER to print it.\n"
-    "\tTo stay silent, return NULL.\n"
-    "\tTo given an error, return an error pointer.\n"
-    "\t[In this case, you need to cast the 'const' away]\n"
-    "If number indicates a configure option:\n"
-    "\tIf arg_string is arg_STATUS, then print status, otherwise use "
-    "argc and arg_string to set option.\n"
-    "\tReturn NULL for no error.\n"
-    "\tReturn one of the four error codes below (configure_*) for a "
-    "generic error message.\n"
-    "\tReturn an error pointer for a custom error.\n"
-    "If number indicates a command entry:\n"
-    "\tExecute the command given by number, and arg_string.\n"
-    "\tReturn NULL on success,\n"
-    "\tReturn a pointer to an error block on failure."
-  };
-
+  prototypedef_t header_text = ProtoInfo_CommandsText();
   prototypedef_t header_proto;
   help_list l;
   int n = 0;
-
-  header_proto = header_text;
-  header_proto.description=NULL;
 
 #ifdef CLASSIC_HEADERS
 #else
@@ -474,7 +323,7 @@ static void commands(void) {
 
   if (opt.helpfn)
   {
-    header_proto.name = opt.helpfn;
+    header_proto = ProtoInfo_CommandsProto(opt.helpfn);
     prototype_write(&header_proto);
   }
   if (opt.command_codesupplied)
@@ -483,7 +332,7 @@ static void commands(void) {
     while (l) {
       if (l->handler)
       {
-        header_proto.name = l->handler;
+        header_proto = ProtoInfo_CommandsProto(l->handler);
         prototype_write(&header_proto);
       }
       l=l->next;
@@ -521,41 +370,13 @@ static void commands(void) {
 
 static void swi_handler(void) {
 
-  static prototypedef_t header_text =
-  {
-    NULL, /* Function name is filled in */
-    "%error%",
-    "SWI handler routine. All SWIs for this module will be passed "
-    "to these routines.",
-    NULL, /* No note */
-    { /* Entry parameters */
-      {
-        "int",
-        "number",
-        "SWI number within SWI chunk (i.e. 0 to 63)" },
-      {
-        "%regs%",
-        "r",
-        "pointer to register block on entry" },
-      {
-        "void *",
-        "pw",
-        "private word for module" },
-    },
-    "Return NULL if SWI handled successfully, setting return register "
-    "values (r0-r9) in r.\n"
-    "Return error_BAD_SWI for out of range SWIs.\n"
-    "Return an error block for a custom error."
-  };
+  prototypedef_t header_text = ProtoInfo_SwiHandlerText();
 
   swi_list l;
   char *prefix=opt.swi_names->name;
   int swi=opt.swi_base;
 
   prototypedef_t header_proto;
-
-  header_proto = header_text;
-  header_proto.description = NULL;
 
 #ifdef CLASSIC_HEADERS
 #else
@@ -565,7 +386,7 @@ static void swi_handler(void) {
   if (opt.swi_handler)
   {
     c_comment(file, "Function called to handle SWI calls");
-    header_proto.name = opt.swi_handler;
+    header_proto = ProtoInfo_SwiHandlerProto(opt.swi_handler);
     prototype_write(&header_proto);
   }
   if (opt.swi_codesupplied)
@@ -576,7 +397,7 @@ static void swi_handler(void) {
     {
       if (l->handler)
       {
-        header_proto.name = l->handler;
+        header_proto = ProtoInfo_SwiHandlerProto(l->handler);
         prototype_write(&header_proto);
       }
       l=l->next;
@@ -621,100 +442,17 @@ static void swi_decoder(void) {
 
   if (opt.swi_decoder->handler) {
 
-    static prototypedef_t header_nametonumber =
-    {
-      NULL, /* Function name is filled in */
-      "int",
-      "SWI name to number decoding handler.",
-      NULL, /* No note */
-      { /* Entry parameters */
-        {
-          "const char *",
-          "string",
-          "pointer to string to decode (control char terminated)" },
-        {
-          "void *",
-          "pw",
-          "private word for module" },
-      },
-      "If you recognise the string, return the offset within "
-      "the SWI chunk (i.e. 0 to 63).\n"
-      "Otherwise return < 0"
-    };
-
-    static prototypedef_t header_numbertoname =
-    {
-      NULL, /* Function name is filled in */
-      "int",
-      "SWI number to name decoding handler.",
-      NULL, /* No note */
-      { /* Entry parameters */
-        {
-          "int",
-          "number",
-          "offset within SWI chunk (0 to 63)" },
-        {
-          "char *",
-          "string",
-          "pointer to output buffer" },
-        {
-          "int",
-          "offset",
-          "offset within buffer to start writing" },
-        {
-          "int",
-          "size",
-          "size of the output buffer" },
-        {
-          "void *",
-          "pw",
-          "private word for module" },
-      },
-      "If the SWI number is recognised, write the SWI name into "
-      "the buffer at the correct offset. Do not terminate the string; "
-      "return the offset to next free char.\n"
-      "If the SWI is unrecognised, return offset unchanged."
-    };
-    header_nametonumber.name = opt.swi_decoder->name;
-    header_numbertoname.name = opt.swi_decoder->handler;
+    prototypedef_t header_nametonumber =
+        ProtoInfo_SwiDecoderNameToNumber(opt.swi_decoder->name);
+    prototypedef_t header_numbertoname =
+        ProtoInfo_SwiDecoderNumberToName(opt.swi_decoder->handler);
 
     prototype_write(&header_nametonumber);
     prototype_write(&header_numbertoname);
 
   } else {
 
-    static prototypedef_t header =
-    {
-      NULL, /* Function name is filled in */
-      "int",
-      "SWI number/name decoding handler.",
-      NULL, /* No note */
-      { /* Entry parameters */
-        {
-          "int",
-          "r[4]",
-          "If r[0] < 0 then :\n"
-          "\tr[1] points to a control terminatated string which you should "
-          "convert to a number.\n"
-          "\tIf you recognise the name, set r[0] to the offset within the SWI "
-          "chunk.\n"
-          "\tIf you do not recognise the name, set r[0] < 0.\n"
-          "If r[0] >= 0 then :\n"
-          "\tr[0] = offset within the SWI block\n"
-          "\tr[1] = pointer to an output buffer\n"
-          "\tr[2] = offset within buffer to fill from\n"
-          "\tr[3] = pointer to byte beyond the end of the buffer\n"
-          "\tIf the offset is recognised, fill the buffer from the required "
-          "point (updating, r[2], without a terminator), and return NULL."
-          "\tIf the offset is not recognised, return an error pointer.\n" },
-        {
-          "void *",
-          "pw",
-          "private word for module" },
-      },
-      "As defined above."
-    };
-    header.name = opt.swi_decoder->name;
+    prototypedef_t header = ProtoInfo_SwiDecoderCombined(opt.swi_decoder->name);
 
     prototype_write(&header);
   }
@@ -722,97 +460,20 @@ static void swi_decoder(void) {
 
 static void event_handler(void) {
 
-  static prototypedef_t header_entry =
-  {
-    NULL, /* Function name is filled in */
-    "extern void",
-    "Symbol for entry point to module - NOT a C function.\n"
-    "This name should be used as an argument to OS_Claim/OS_Release as "
-    "required, but should never be called from C.",
-    NULL, /* No note */
-    { { NULL } }, /* NO Entry parameters */
-    NULL
-  };
-
-  static prototypedef_t header_handler =
-  {
-    NULL, /* Function name is filled in */
-    "int",
-    "Event handler routine. Events will be passed to this routine if "
-    "they are in the accept list (or all, if no list was provided).",
-    NULL, /* No note */
-    { /* Entry parameters */
-      {
-        "%regs%",
-        "r",
-        "pointer to register block on entry" },
-      {
-        "void *",
-        "pw",
-        "private word for module" },
-    },
-    "Update r to alter return values.\n"
-    "Return 0 to claim event (pulling return address from the stack).\n"
-    "Return non-0 to pass on (returning via r14)."
-  };
-
-  header_entry.name = opt.events->name;
-
-  if (opt.events->handler)
-    header_handler.name = opt.events->handler;
-  else
-  {
-    static char buffer[MAXLINELEN];
-    sprintf(buffer,"%s_handler",opt.events->name);
-    header_handler.name = buffer;
-  }
+  prototypedef_t header_entry = ProtoInfo_EventEntry(opt.events->name);
+  prototypedef_t header_handler = ProtoInfo_EventHandler(
+      ProtoInfo_HandlerName(opt.events->name, opt.events->handler));
 
   prototype_write(&header_entry);
   prototype_write(&header_handler);
 }
 
-typedef enum {
-  ret_int,       /* vector/irq */
-  ret_err,       /* generic */
-  ret_errspecial /* vector-trap */
-} rettype;
-
 static void handlers(handler_list head, const char *type, rettype rtype) {
 
   int carry_used = 0;
   int error_used = 0;
+  int is_irq = (head == opt.irqs);
   handler_list h = head;
-
-  static prototypedef_t header_entry =
-  {
-    NULL, /* Function name is filled in */
-    "extern void",
-    "Symbol for entry point to module - NOT a C function.\n"
-    "This name should be used as an argument to OS_Claim/OS_Release as "
-    "required, but should never be called from C.",
-    NULL, /* Note will be updated */
-    { { NULL } }, /* NO Entry parameters */
-    NULL
-  };
-
-  static prototypedef_t header_handler =
-  {
-    NULL, /* Function name is filled in */
-    NULL, /* Type will be filled in */
-    NULL, /* Description will be filled in */
-    NULL, /* No note */
-    { /* Entry parameters */
-      {
-        "%regs%",
-        "r",
-        "pointer to register block on entry" },
-      {
-        "void *",
-        "pw",
-        "private word for module" },
-    },
-    NULL /* Exit will be updated */
-  };
 
   if (rtype==ret_errspecial)
   {
@@ -822,118 +483,15 @@ static void handlers(handler_list head, const char *type, rettype rtype) {
                  error,regs);
   }
 
-  switch (rtype)
-  {
-    case ret_int:
-      header_handler.returntype = "int";
-      if (head != opt.irqs)
-      {
-        header_handler.exit = "Update r to alter return values\n"
-                              "Return VECTOR_CLAIM to claim (return via stack)\n"
-                              "Return VECTOR_PASSON to pass on (return via r14)";
-      }
-      else
-      {
-        header_handler.exit = "Update r to alter return values\n"
-                              "Return 0 to claim (return via stack)\n"
-                              "Return non-0 to pass on (return via r14)";
-      }
-      break;
-
-    case ret_err:
-      header_handler.returntype = "%error%";
-      header_handler.exit = "Update r to alter return values\n"
-                            "Return NULL to return with V clear\n"
-                            "Return an error pointer to set V and r0";
-      break;
-
-    case ret_errspecial:
-      header_handler.returntype = "%error%";
-      header_handler.exit = "Update r to alter return values\n"
-                            "Return NULL to return from vector (claiming it)\n"
-                            "Return VECTORTRAP_PASSON to return pass on "
-                            "to next claimant\n"
-                            "Return error pointer to return with V set "
-                            "and error in R0";
-      break;
-    default:
-      ErrorFatal("Programmer confusion error (bad return type for handler)");
-  }
-
   if (!h)
     return; /* Nothing to do */
 
   while (h) {
 
-    if (h->private_word != -1)
-    {
-      if (h->private_word != 12)
-      {
-        static char buffer[2048];
-        sprintf(buffer,
-          "This entry point takes its private word in register r%i rather "
-          "than r12 as is more usually used. r12 will be preserved around "
-          "this entry point. This type of entry would be used for a callback "
-          "such as a SoundDMA linear handler.",h->private_word);
-        header_entry.note = buffer;
-      }
-      else
-      {
-        header_entry.note = "This entry point will preserve r12.";
-      }
-    }
-    else
-    {
-      header_entry.note = NULL;
-    }
-
-    /* JRF: Really we should be updating the exit comment, but this is easier
-            for now. */
-    if (h->error_capable)
-    {
-      header_handler.note =
-        "VECTOR_ERROR(error) may also be used to claim this vector, "
-        "and return with V set and R0 set to the pointer supplied.";
-    }
-    else
-    {
-      header_handler.note = NULL;
-    }
-
-    {
-      static char buffer[MAXLINELEN];
-      sprintf(buffer, "%s handler function", type);
-      header_handler.description = buffer;
-    }
-
-    header_entry.name = h->name;
-
-    if (h->handler)
-    {
-      header_handler.name = h->handler;
-    }
-    else
-    {
-      static char buffer[MAXLINELEN];
-      sprintf(buffer,"%s_handler", h->name);
-      header_handler.name = buffer;
-    }
-
-    if (rtype==ret_errspecial)
-    {
-      /* The function prototype for the trap routine, and the private word
-         it will take */
-      header_handler.param[2].type = "vectortrap_f";
-      header_handler.param[2].name = "trap";
-      header_handler.param[2].meaning =
-          "pointer to function to call to pass on vector";
-      header_handler.param[3].type = "void *";
-      header_handler.param[3].name = "trappw";
-      header_handler.param[3].meaning =
-          "private word to pass to trap function";
-    }
-    else
-      header_handler.param[2].type = NULL;
+    prototypedef_t header_entry = ProtoInfo_HandlerEntry(h->name, h->private_word);
+    prototypedef_t header_handler = ProtoInfo_HandlerHandler(type, rtype,
+        ProtoInfo_HandlerName(h->name, h->handler),
+        h->error_capable, is_irq);
 
     if (h->carry_capable)
       carry_used = 1;

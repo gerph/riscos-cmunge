@@ -20,10 +20,11 @@ FILES = \
 	error.h filename.c filename.h format.c \
 	format.h gfile.c gfile.h main.c \
 	mem.c mem.h MemCheck.h options.c \
-	options.h readfile.c readfile.h str.c \
+	options.h protoinfo.c protoinfo.h readfile.c readfile.h str.c \
 	str.h system.c system.h throwback.c \
 	throwback.h VersionNum writeexport.c writeexport.h \
-	writefile.c writefile.h writeheader.c writeheader.h
+	writefile.c writefile.h writeheader.c writeheader.h \
+	writeheaderd.c writeheaderd.h
 
 OBJS = \
   apcscli.o \
@@ -38,13 +39,15 @@ OBJS = \
   main.o \
   mem.o \
   options.o \
+  protoinfo.o \
   readfile.o \
   str.o \
   system.o \
   throwback.o \
   writeexport.o \
   writefile.o \
-  writeheader.o
+  writeheader.o \
+  writeheaderd.o
 
 .PHONY: all links cross_export cross_install tool_dir clean
 
@@ -131,7 +134,7 @@ gfile.c: ../c/gfile
 	ln -sf ../c/gfile gfile.c
 gfile.h: ../h/gfile
 	ln -sf ../h/gfile gfile.h
-main.o: main.c MemCheck.h gfile.h options.h readfile.h writefile.h writeheader.h writeexport.h assemble.h datestamp.h blank.h format.h copyright.h VersionNum
+main.o: main.c MemCheck.h gfile.h options.h readfile.h writefile.h writeheader.h writeheaderd.h writeexport.h assemble.h datestamp.h blank.h format.h copyright.h VersionNum
 main.c: ../c/main
 	ln -sf ../c/main main.c
 mem.o: mem.c error.h
@@ -146,6 +149,11 @@ options.c: ../c/options
 	ln -sf ../c/options options.c
 options.h: ../h/options
 	ln -sf ../h/options options.h
+protoinfo.o: protoinfo.c error.h options.h protoinfo.h
+protoinfo.c: ../c/protoinfo
+	ln -sf ../c/protoinfo protoinfo.c
+protoinfo.h: ../h/protoinfo
+	ln -sf ../h/protoinfo protoinfo.h
 readfile.o: readfile.c gfile.h error.h mem.h options.h str.h readfile.h system.h filename.h
 readfile.c: ../c/readfile
 	ln -sf ../c/readfile readfile.c
@@ -178,8 +186,13 @@ writefile.c: ../c/writefile
 	ln -sf ../c/writefile writefile.c
 writefile.h: ../h/writefile
 	ln -sf ../h/writefile writefile.h
-writeheader.o: writeheader.c gfile.h error.h options.h format.h comments.h copyright.h VersionNum
+writeheader.o: writeheader.c gfile.h error.h options.h format.h comments.h protoinfo.h copyright.h VersionNum
 writeheader.c: ../c/writeheader
 	ln -sf ../c/writeheader writeheader.c
 writeheader.h: ../h/writeheader
 	ln -sf ../h/writeheader writeheader.h
+writeheaderd.o: writeheaderd.c gfile.h error.h options.h format.h comments.h protoinfo.h copyright.h VersionNum
+writeheaderd.c: ../c/writeheaderd
+	ln -sf ../c/writeheaderd writeheaderd.c
+writeheaderd.h: ../h/writeheaderd
+	ln -sf ../h/writeheaderd writeheaderd.h

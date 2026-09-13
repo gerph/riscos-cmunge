@@ -1,0 +1,66 @@
+/*
+ * Copyright (C) 1999-2025 Robin Watts/Justin Fletcher
+ */
+
+/* Shared descriptions of the module entry point prototypes.
+ *
+ * The 'what' of each generated module entry point (its name, argument
+ * list and English documentation) is described here, independently of
+ * the 'how' (the language-specific syntax and comment style used to
+ * render it). writeheader (C) and writeheaderd (D) each render these
+ * descriptions in their own syntax, so the prototypes and their
+ * documentation can never drift apart between the languages CMunge
+ * supports.
+ */
+
+#ifndef PROTOINFO_H
+
+#define PROTOINFO_H
+
+/* Maximum number of arguments we can declare in a header descriptor */
+#define MAXARGS (5)
+
+typedef struct argumentpair_s {
+  char *type;    /* Variable type, expressed in C syntax (eg 'int',
+                    'const char *'), or one of the magic '%error%'/
+                    '%regs%' markers */
+  char *name;    /* Variable name */
+  char *meaning; /* Variable value */
+} argumentpair_t;
+
+typedef struct prototypedef_s {
+  char *name;                         /* the function name */
+  char *returntype;                   /* type of data returned */
+  char *description;                  /* function description */
+  char *note;                         /* Notes about this prototype */
+  argumentpair_t param[MAXARGS];      /* list of parameters passed in */
+  char *exit;                         /* description of return parameters */
+} prototypedef_t;
+
+/* The return convention used by a vector/IRQ/generic/vector-trap handler */
+typedef enum {
+  ret_int,       /* vector/irq */
+  ret_err,       /* generic */
+  ret_errspecial /* vector-trap */
+} rettype;
+
+prototypedef_t ProtoInfo_Main(void);
+prototypedef_t ProtoInfo_Init(void);
+prototypedef_t ProtoInfo_Fin(void);
+prototypedef_t ProtoInfo_Service(void);
+prototypedef_t ProtoInfo_CommandsText(void);
+prototypedef_t ProtoInfo_CommandsProto(char *name);
+prototypedef_t ProtoInfo_SwiHandlerText(void);
+prototypedef_t ProtoInfo_SwiHandlerProto(char *name);
+prototypedef_t ProtoInfo_SwiDecoderNameToNumber(char *name);
+prototypedef_t ProtoInfo_SwiDecoderNumberToName(char *name);
+prototypedef_t ProtoInfo_SwiDecoderCombined(char *name);
+prototypedef_t ProtoInfo_EventEntry(char *name);
+prototypedef_t ProtoInfo_EventHandler(char *name);
+char *ProtoInfo_HandlerName(char *name, char *handler);
+prototypedef_t ProtoInfo_HandlerEntry(char *name, int private_word);
+prototypedef_t ProtoInfo_HandlerHandler(const char *type, rettype rtype,
+                                         char *name, int error_capable,
+                                         int is_irq);
+
+#endif

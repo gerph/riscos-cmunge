@@ -1,0 +1,11 @@
+/*
+ * Copyright (C) 2025 Robin Watts/Justin Fletcher
+ */
+
+#ifndef WRITEHEADERD_H
+
+#define WRITEHEADERD_H
+
+void WriteHeaderD(void);
+
+#endif
