@@ -26,6 +26,17 @@
 #define GCC_BIN_DIR ""
 #endif
 
+/* See the matching comment in c/assemble: RISCOS_GCC_PATHVAR/
+ * RISCOS_GCC_DEFAULT are only #defined in h/options' non-__riscos
+ * branch, so a native __riscos build needs this same fallback GCC_BIN_DIR
+ * already has above, or it fails to compile outright. */
+#ifndef RISCOS_GCC_PATHVAR
+#define RISCOS_GCC_PATHVAR "RISCOS_GCC"
+#endif
+#ifndef RISCOS_GCC_DEFAULT
+#define RISCOS_GCC_DEFAULT "gcc"
+#endif
+
 #define UNUSED(x) { x=x; }
 
 /*****************************************************************************

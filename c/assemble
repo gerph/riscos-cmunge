@@ -18,6 +18,22 @@
 #define GCC_BIN_DIR ""
 #endif
 
+/* RISCOS_GCC_PATHVAR/RISCOS_GCC_DEFAULT are only #defined in h/options'
+ * non-__riscos branch (the Linux/host build) - a native __riscos build
+ * (no dedicated-assembler env var mechanism at all, see GCC_AS64_PATHVAR
+ * below) never defines them, so both need this same self-contained
+ * fallback GCC_BIN_DIR already has above, or a native build fails to
+ * compile outright ("undeclared name, inventing 'extern int
+ * RISCOS_GCC_PATHVAR'" - confirmed the hard way via a real CI failure).
+ * RISCOS_GCC_DEFAULT falls back to plain "gcc", preserving this file's
+ * original native-build behaviour exactly. */
+#ifndef RISCOS_GCC_PATHVAR
+#define RISCOS_GCC_PATHVAR "RISCOS_GCC"
+#endif
+#ifndef RISCOS_GCC_DEFAULT
+#define RISCOS_GCC_DEFAULT "gcc"
+#endif
+
 static char buf[2048];
 
 void AssembleFile(void) {
