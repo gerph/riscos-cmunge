@@ -1625,8 +1625,15 @@ void ReadFile(void) {
       case tc_gcc:
         /* -xc hints that the input language is to be considered as C
            because that is not necessarily guessable with the usual
-           cmhg extension. */
-        bufend = buf+sprintf(buf, GCC_BIN_DIR "gcc -E -nostdinc -xc");
+           cmhg extension. RISCOS_GCC_PATHVAR overrides the binary name -
+           a bare "gcc" may not exist at all against a triple-prefixed
+           cross-compiler such as GCCSDK's arm-unknown-riscos-gcc. */
+        {
+          char *riscos_gcc = getenv(RISCOS_GCC_PATHVAR);
+          if (!riscos_gcc)
+              riscos_gcc = RISCOS_GCC_DEFAULT;
+          bufend = buf+sprintf(buf, GCC_BIN_DIR "%s -E -nostdinc -xc", riscos_gcc);
+        }
         break;
       case tc_norcroft:
         bufend = buf+sprintf(buf, "%s -E -C++", NORCROFT_CC);

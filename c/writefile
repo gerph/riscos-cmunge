@@ -405,7 +405,18 @@ $label  ADR$cc.L $reg, $object\n\
   if (! CODE64)
   {
     fprintf(file, "\tAREA\t|!Header$$code|, %s, READONLY%s%s\n\n",
-                   (CODE26) ? "CODE" : "CODE, A32bit",
+                   /* A32bit is a real Norcroft ObjAsm AREA attribute
+                    * (flags an area as genuinely 32-bit-only), but
+                    * GCCSDK's asasm - the assembler used for the
+                    * tc_gcc/tc_lcc toolchains - doesn't recognise it
+                    * (confirmed empirically: "AREA attribute A32bit is
+                    * not known"). Only emit it for tc_norcroft, where it
+                    * originally came from; a GCC-toolchain build is
+                    * inherently 32-bit-only already (see the 26-bit APCS
+                    * Open Question in the GCCSDK design doc), so nothing
+                    * is lost by omitting it there. */
+                   (CODE26) ? "CODE" :
+                     ((opt.toolchain == tc_norcroft) ? "CODE, A32bit" : "CODE"),
                    (opt.apcs & APCS_REENTRANT) ? ", PIC, REENTRANT" : "",
                    (opt.apcs & APCS_FPE3) ? ", FP3" : "");
   }
@@ -2187,7 +2198,10 @@ static void errors(void) {
   {
     /* Still needs to be flagged as CODE because it isn't copyable */
     fprintf(file, "\tAREA\t|!Header$$code2|, %s, READONLY%s%s\n\n",
-                   (CODE26) ? "CODE" : "CODE, A32bit",
+                   /* A32bit omitted for tc_gcc/tc_lcc - see the same
+                    * ternary above, near the |!Header$$code| AREA. */
+                   (CODE26) ? "CODE" :
+                     ((opt.toolchain == tc_norcroft) ? "CODE, A32bit" : "CODE"),
                    (opt.apcs & APCS_REENTRANT) ? ", PIC, REENTRANT" : "",
                    (opt.apcs & APCS_FPE3) ? ", FP3" : "");
   }

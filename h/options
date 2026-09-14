@@ -204,8 +204,14 @@ void Options_CheckSanityPostRead(void);
 #else
 #define NORCROFT_OBJASM     "riscos-objasm"
 #define NORCROFT_CC         "riscos-cc"
-#define GCC_AS64_PATHVAR    "CMUNGE_AS_AARCH32"
-#define GCC_AS32_PATHVAR    "CMUNGE_AS_AARCH64"
+#define GCC_AS64_PATHVAR    "CMUNGE_AS_AARCH64"
+#define GCC_AS32_PATHVAR    "CMUNGE_AS_AARCH32"
+/* Command to invoke for a 32-bit GCC-toolchain compile/assemble/preprocess
+ * (tc_gcc/tc_lcc, CODE32) - overridable so a real cross-compiler name
+ * (eg "arm-unknown-riscos-gcc", GCCSDK's own triple-prefixed binary) can be
+ * used instead of a bare "gcc" that may not exist on PATH at all. */
+#define RISCOS_GCC_PATHVAR  "RISCOS_GCC"
+#define RISCOS_GCC_DEFAULT  "arm-unknown-riscos-gcc"
 #endif
 
 #endif
