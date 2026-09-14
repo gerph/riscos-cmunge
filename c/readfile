@@ -26,6 +26,17 @@
 #define GCC_BIN_DIR ""
 #endif
 
+/* See the matching comment in c/assemble: RISCOS_GCC_PATHVAR/
+ * RISCOS_GCC_DEFAULT are only #defined in h/options' non-__riscos
+ * branch, so a native __riscos build needs this same fallback GCC_BIN_DIR
+ * already has above, or it fails to compile outright. */
+#ifndef RISCOS_GCC_PATHVAR
+#define RISCOS_GCC_PATHVAR "RISCOS_GCC"
+#endif
+#ifndef RISCOS_GCC_DEFAULT
+#define RISCOS_GCC_DEFAULT "gcc"
+#endif
+
 #define UNUSED(x) { x=x; }
 
 /*****************************************************************************
@@ -1625,8 +1636,15 @@ void ReadFile(void) {
       case tc_gcc:
         /* -xc hints that the input language is to be considered as C
            because that is not necessarily guessable with the usual
-           cmhg extension. */
-        bufend = buf+sprintf(buf, GCC_BIN_DIR "gcc -E -nostdinc -xc");
+           cmhg extension. RISCOS_GCC_PATHVAR overrides the binary name -
+           a bare "gcc" may not exist at all against a triple-prefixed
+           cross-compiler such as GCCSDK's arm-unknown-riscos-gcc. */
+        {
+          char *riscos_gcc = getenv(RISCOS_GCC_PATHVAR);
+          if (!riscos_gcc)
+              riscos_gcc = RISCOS_GCC_DEFAULT;
+          bufend = buf+sprintf(buf, GCC_BIN_DIR "%s -E -nostdinc -xc", riscos_gcc);
+        }
         break;
       case tc_norcroft:
         bufend = buf+sprintf(buf, "%s -E -C++", NORCROFT_CC);

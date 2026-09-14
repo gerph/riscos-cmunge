@@ -18,6 +18,22 @@
 #define GCC_BIN_DIR ""
 #endif
 
+/* RISCOS_GCC_PATHVAR/RISCOS_GCC_DEFAULT are only #defined in h/options'
+ * non-__riscos branch (the Linux/host build) - a native __riscos build
+ * (no dedicated-assembler env var mechanism at all, see GCC_AS64_PATHVAR
+ * below) never defines them, so both need this same self-contained
+ * fallback GCC_BIN_DIR already has above, or a native build fails to
+ * compile outright ("undeclared name, inventing 'extern int
+ * RISCOS_GCC_PATHVAR'" - confirmed the hard way via a real CI failure).
+ * RISCOS_GCC_DEFAULT falls back to plain "gcc", preserving this file's
+ * original native-build behaviour exactly. */
+#ifndef RISCOS_GCC_PATHVAR
+#define RISCOS_GCC_PATHVAR "RISCOS_GCC"
+#endif
+#ifndef RISCOS_GCC_DEFAULT
+#define RISCOS_GCC_DEFAULT "gcc"
+#endif
+
 static char buf[2048];
 
 void AssembleFile(void) {
@@ -52,10 +68,41 @@ void AssembleFile(void) {
         {
 #ifdef GCC_AS64_PATHVAR
             char *gcc_as;
+            int using_asasm_default = 0;
             gcc_as = getenv(CODE64 ? GCC_AS64_PATHVAR : GCC_AS32_PATHVAR);
             if (!gcc_as && CODE64)
                 gcc_as = "riscos64-as";
-            if (gcc_as)
+            if (!gcc_as && CODE32)
+            {
+                /* The veneer we generate is genuine ObjAsm syntax (AREA/
+                 * GBLL/MACRO/|bar-quoted| symbols, etc), which GNU as
+                 * (what "gcc -xassembler" below would invoke) cannot parse
+                 * at all - confirmed empirically, not a flag/spelling
+                 * issue like the -apcs32/-apcsfpv3 one above. GCCSDK's own
+                 * bundled asasm (part of the GCCSDK sources - not written
+                 * by anyone on this team) understands this syntax and is
+                 * the correct default here - it takes "-o <out> <in>"
+                 * rather than the "-c <in> -o <out>" shape below. */
+                gcc_as = "asasm";
+                using_asasm_default = 1;
+            }
+            if (gcc_as && using_asasm_default)
+            {
+                /* asasm silently produces no output at all for a relative
+                 * -o path with a subdirectory component that doesn't
+                 * already start with "./" (eg "o/testmod") - confirmed
+                 * empirically: "-o o/testmod" exits 0 with no file
+                 * written, "-o ./o/testmod" works. Whether opt.ofile
+                 * already has a leading "./" or "/" isn't guaranteed by
+                 * anything upstream, so add one whenever it's a relative
+                 * path without one, rather than relying on callers to
+                 * happen to pass paths in the one shape asasm accepts. */
+                sprintf(buf, "%s -o %s%s %s",
+                             gcc_as,
+                             (opt.ofile[0] == '/' || (opt.ofile[0] == '.' && opt.ofile[1] == '/')) ? "" : "./",
+                             opt.ofile, opt.sfile);
+            }
+            else if (gcc_as)
             {
                 sprintf(buf, "%s -c %s -o %s",
                              gcc_as, opt.sfile, opt.ofile);
@@ -68,8 +115,25 @@ void AssembleFile(void) {
 #endif
             else
             {
-                sprintf(buf, GCC_BIN_DIR "gcc -xassembler -mmodule %s %s -c %s -o %s",
-                             (CODE32) ? "-apcs32 -apcsfpv3" : "",
+                /* No dedicated assembler configured - assemble via GCC
+                 * itself (-xassembler). CODE32's -mabi=apcs-32/-mfpe=2/
+                 * -mno-apcs-stack-check replace this file's previous
+                 * -apcs32/-apcsfpv3, which were never valid GCC options on
+                 * any GCCSDK build we could find and test against (that
+                 * spelling doesn't match GCC's -m<name> convention at
+                 * all) - -mabi=apcs-32 is the real APCS-32 ABI selector,
+                 * -mfpe=2 matches this tool's own advertised default FPE
+                 * variant (see the -apcs help text), and
+                 * -mno-apcs-stack-check avoids every compiled module
+                 * needing a __rt_stkovf_split_small/_big runtime symbol
+                 * neither our own C library nor GCCSDK's default
+                 * environment currently provides. */
+                char *riscos_gcc = getenv(RISCOS_GCC_PATHVAR);
+                if (!riscos_gcc)
+                    riscos_gcc = RISCOS_GCC_DEFAULT;
+                sprintf(buf, GCC_BIN_DIR "%s -xassembler -mmodule %s %s -c %s -o %s",
+                             riscos_gcc,
+                             (CODE32) ? "-mabi=apcs-32 -mfpe=2 -mno-apcs-stack-check" : "",
                              throwback ? "-mthrowback" : "",
                              opt.sfile, opt.ofile);
             }
