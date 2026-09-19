@@ -48,6 +48,7 @@ void Options_Init(void) {
   opt.pfile       = NULL; /* Pre-processor output */
   opt.pextended   = 0;    /* Extended pre-processor input */
   opt.hfile       = NULL; /* Header output */
+  opt.x_rs        = NULL; /* Rust header output */
   opt.throwback   = 0;
   opt.rootinfile  = NULL;
   opt.infile      = NULL;
@@ -98,6 +99,7 @@ static void help_text(void) {
 "\t-xhdr <file>  \bName a Assembler SWI header file that CMunge will generate.\n"
 "\t-xh <file>    \bName a C SWI header file that CMunge will generate.\n"
 "\t-xd <file>    \bName a D interface (.di) file that CMunge will generate.\n"
+"\t-xrs <file>   \bName a Rust module file that CMunge will generate.\n"
 "\t-p            \bPre-process the file with pre-processor before parsing.\n"
 "\t-px           \bExtended pre-processing of all content from pre-processor.\n"
 /*"-b            \bUse _blib_entermodule instead of SCL version\n" */
@@ -160,6 +162,8 @@ void Options_CL(int argc, char *argv[]) {
         file=&opt.x_h;
       } else if (stricmp("d", arg)) {
         file=&opt.x_d;
+      } else if (stricmp("rs", arg)) {
+        file=&opt.x_rs;
       }
       if (file==NULL)
         ErrorFatal("Export flag %s not known!",arg);
@@ -348,6 +352,8 @@ void Options_CheckSanity(void) {
       CMHGWarning("-xh specified");
     if (opt.x_d)
       CMHGWarning("-xd specified");
+    if (opt.x_rs)
+      CMHGWarning("-xrs specified");
     if (opt.oslib)
       CMHGWarning("-zoslib specified");
     if (opt.mode_errors)
@@ -383,12 +389,15 @@ void Options_CheckSanity(void) {
   if (!opt.blank)
   {
     if ((opt.ofile == NULL) && (opt.sfile == NULL) && (opt.hfile == NULL) &&
-        (opt.x_hdr == NULL) && (opt.x_h == NULL) && (opt.x_d == NULL))
+        (opt.x_hdr == NULL) && (opt.x_h == NULL) && (opt.x_d == NULL) &&
+        (opt.x_rs == NULL))
       ErrorFatal("No output file specified!");
   }
   else
   {
-    if (! ((opt.ofile == NULL) && (opt.sfile == NULL) && (opt.hfile == NULL)))
+    if (! ((opt.ofile == NULL) && (opt.sfile == NULL) && (opt.hfile == NULL) &&
+           (opt.x_hdr == NULL) && (opt.x_h == NULL) && (opt.x_d == NULL) &&
+           (opt.x_rs == NULL)))
       ErrorFatal("Output files specified with blank template!");
   }
 

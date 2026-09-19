@@ -1,0 +1,7 @@
+title-string:           RustExtraSingle
+help-string:            Rust_ExtraSingle 0.01
+date-string:            11 Jun 2026
+swi-chunk-base-number:  &45640
+swi-handler-code:       Mod_SWI
+swi-decoding-table:     RustExtraSingle,One
+swi-decoding-code:      SWI_Decode

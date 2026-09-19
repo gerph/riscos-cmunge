@@ -1,0 +1,637 @@
+/*
+ * Copyright (C) 2026 Robin Watts/Justin Fletcher
+ */
+
+#include <stdio.h>
+#include <string.h>
+
+#include "gfile.h"
+#include "error.h"
+#include "options.h"
+#include "comments.h"
+
+#include "copyright.h"
+
+#include "VersionNum"
+
+static FILE *file;
+
+/*************************************************** Gerph *********
+ Function:     rust_alias_name
+ Description:  Form a Rust type alias identifier from a symbol name.
+ Parameters:   name = symbol name
+ Returns:      pointer to static string
+ ******************************************************************/
+static const char *rust_alias_name(const char *name)
+{
+  static char buffer[256];
+  int pos = 0;
+
+  while (*name != '\0' && pos < (int)sizeof(buffer) - 3)
+  {
+    if ((*name >= 'A' && *name <= 'Z') ||
+        (*name >= 'a' && *name <= 'z') ||
+        (*name >= '0' && *name <= '9') ||
+        (*name == '_'))
+      buffer[pos++] = *name;
+    else
+      buffer[pos++] = '_';
+    name++;
+  }
+  buffer[pos++] = 'F';
+  buffer[pos++] = 'n';
+  buffer[pos] = '\0';
+  return buffer;
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_write_escaped
+ Description:  Write a string escaped for a Rust string literal.
+ Parameters:   text = text to write
+ Returns:      none
+ ******************************************************************/
+static void rust_write_escaped(const char *text)
+{
+  while (*text != '\0')
+  {
+    switch (*text)
+    {
+      case '\\':
+        fputs("\\\\", file);
+        break;
+      case '"':
+        fputs("\\\"", file);
+        break;
+      case '\n':
+        fputs("\\n", file);
+        break;
+      case '\t':
+        fputs("\\t", file);
+        break;
+      case '\r':
+        fputs("\\r", file);
+        break;
+      default:
+        fputc(*text, file);
+        break;
+    }
+    text++;
+  }
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_type
+ Description:  Map CMunge's internal type spelling to Rust FFI spelling.
+ Parameters:   type = type name to translate
+ Returns:      pointer to static string
+ ******************************************************************/
+static const char *rust_type(const char *type)
+{
+  if (strcmp(type, "%error%") == 0)
+    return "*mut KernelOSError";
+  if (strcmp(type, "%regs%") == 0)
+    return "*mut KernelSwiRegs";
+  if (strcmp(type, "vectortrap_f") == 0)
+    return "vectortrap_f";
+  if (strcmp(type, "void") == 0)
+    return "()";
+  if (strcmp(type, "const char *") == 0)
+    return "*const u8";
+  if (strcmp(type, "char *") == 0)
+    return "*mut u8";
+  if (strcmp(type, "void *") == 0)
+    return "*mut c_void";
+  if (strcmp(type, "int") == 0)
+    return "i32";
+  if (strcmp(type, "unsigned int") == 0)
+    return "u32";
+
+  return "/* unsupported type */ *mut c_void";
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_signature
+ Description:  Emit a Rust type alias for a C ABI function signature.
+ Parameters:   alias = alias name to emit
+               returntype = internal CMunge type string
+               arg0..arg4 = parameter types, terminated with NULLs
+ Returns:      none
+ ******************************************************************/
+static void rust_signature(const char *alias,
+                           const char *returntype,
+                           const char *arg0,
+                           const char *arg1,
+                           const char *arg2,
+                           const char *arg3,
+                           const char *arg4)
+{
+  const char *args[5];
+  int i;
+  int started;
+
+  args[0] = arg0;
+  args[1] = arg1;
+  args[2] = arg2;
+  args[3] = arg3;
+  args[4] = arg4;
+
+  fprintf(file, "pub type %s = unsafe extern \"C\" fn(", alias);
+  started = 0;
+  for (i = 0; i < 5; i++)
+  {
+    if (args[i] == NULL)
+      break;
+    if (started)
+      fprintf(file, ", ");
+    fprintf(file, "%s", rust_type(args[i]));
+    started = 1;
+  }
+  fprintf(file, ")");
+  if (strcmp(returntype, "void") != 0)
+    fprintf(file, " -> %s", rust_type(returntype));
+  fprintf(file, ";\n");
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_signature_direct
+ Description:  Emit a Rust type alias using direct Rust FFI type names.
+ Parameters:   alias = alias name to emit
+               returntype = direct Rust return type, or NULL for ()
+               arg0..arg4 = direct Rust parameter types, terminated with NULLs
+ Returns:      none
+ ******************************************************************/
+static void rust_signature_direct(const char *alias,
+                                  const char *returntype,
+                                  const char *arg0,
+                                  const char *arg1,
+                                  const char *arg2,
+                                  const char *arg3,
+                                  const char *arg4)
+{
+  const char *args[5];
+  int i;
+  int started;
+
+  args[0] = arg0;
+  args[1] = arg1;
+  args[2] = arg2;
+  args[3] = arg3;
+  args[4] = arg4;
+
+  fprintf(file, "pub type %s = unsafe extern \"C\" fn(", alias);
+  started = 0;
+  for (i = 0; i < 5; i++)
+  {
+    if (args[i] == NULL)
+      break;
+    if (started)
+      fprintf(file, ", ");
+    fprintf(file, "%s", args[i]);
+    started = 1;
+  }
+  fprintf(file, ")");
+  if (returntype != NULL)
+    fprintf(file, " -> %s", returntype);
+  fprintf(file, ";\n");
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_extern_symbol
+ Description:  Emit a Rust extern static declaration for a non-callable
+               entry symbol.
+ Parameters:   name = symbol name
+ Returns:      none
+ ******************************************************************/
+static void rust_extern_symbol(const char *name)
+{
+  fprintf(file, "unsafe extern \"C\" {\n");
+  fprintf(file, "    pub static %s: u8;\n", name);
+  fprintf(file, "}\n");
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_error_ptr_const
+ Description:  Emit a Rust raw pointer constant for an error sentinel.
+ Parameters:   name = constant name
+               value = integer value to cast
+ Returns:      none
+ ******************************************************************/
+static void rust_error_ptr_const(const char *name, long value)
+{
+  fprintf(file, "pub const %s: *mut KernelOSError = ", name);
+  if (value < 0)
+    fprintf(file, "(%ldisize) as *mut KernelOSError;\n", value);
+  else
+    fprintf(file, "(%ldusize) as *mut KernelOSError;\n", value);
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_u8_ptr_const
+ Description:  Emit a Rust raw pointer constant for a char-pointer
+               sentinel.
+ Parameters:   name = constant name
+               value = integer value to cast
+ Returns:      none
+ ******************************************************************/
+static void rust_u8_ptr_const(const char *name, long value)
+{
+  fprintf(file, "pub const %s: *mut u8 = ", name);
+  if (value == 0)
+    fprintf(file, "core::ptr::null_mut();\n");
+  else if (value < 0)
+    fprintf(file, "(%ldisize) as *mut u8;\n", value);
+  else
+    fprintf(file, "(%ldusize) as *mut u8;\n", value);
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_i32_const
+ Description:  Emit an i32 constant.
+ Parameters:   name = constant name
+               value = value to emit
+ Returns:      none
+ ******************************************************************/
+static void rust_i32_const(const char *name, long value)
+{
+  fprintf(file, "pub const %s: i32 = %ld;\n", name, value);
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_u32_const
+ Description:  Emit a u32 constant.
+ Parameters:   name = constant name
+               value = value to emit
+ Returns:      none
+ ******************************************************************/
+static void rust_u32_const(const char *name, unsigned long value)
+{
+  fprintf(file, "pub const %s: u32 = 0x%08lx;\n", name, value);
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_error_symbol
+ Description:  Emit a Rust extern static and helper for an embedded
+               module error block.
+ Parameters:   name = public error identifier
+ Returns:      none
+ ******************************************************************/
+static void rust_error_symbol(const char *name)
+{
+  fprintf(file, "unsafe extern \"C\" {\n");
+  fprintf(file, "    pub static __err_%s: KernelOSError;\n", name);
+  fprintf(file, "}\n");
+  fprintf(file, "#[inline]\n");
+  fprintf(file, "pub unsafe fn %s() -> *const KernelOSError {\n", name);
+  fprintf(file, "    &raw const __err_%s\n", name);
+  fprintf(file, "}\n");
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_const_string
+ Description:  Emit a public Rust string constant.
+ Parameters:   name = constant name
+               value = constant string value
+ Returns:      none
+ ******************************************************************/
+static void rust_const_string(const char *name, const char *value)
+{
+  fprintf(file, "pub const %s: &str = \"", name);
+  rust_write_escaped(value);
+  fprintf(file, "\";\n");
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_command_support
+ Description:  Emit command handler aliases and constants.
+ Parameters:   none
+ Returns:      none
+ ******************************************************************/
+static void rust_command_support(void)
+{
+  help_list l;
+  int n = 0;
+  static const char *command_args[] = {
+    "const char *",
+    "int",
+    "int",
+    "void *",
+    NULL
+  };
+
+  if (opt.helpfn || opt.command_codesupplied)
+  {
+    if (opt.helpfn)
+      rust_signature(rust_alias_name(opt.helpfn), "%error%",
+                     command_args[0], command_args[1], command_args[2], command_args[3], NULL);
+    if (opt.command_codesupplied)
+    {
+      l = opt.commands;
+      while (l)
+      {
+        if (l->handler)
+          rust_signature(rust_alias_name(l->handler), "%error%",
+                         command_args[0], command_args[1], command_args[2], command_args[3], NULL);
+        l = l->next;
+      }
+    }
+
+    rust_error_ptr_const("HELP_PRINT_BUFFER", 0);
+    fprintf(file, "pub const ARG_CONFIGURE_SYNTAX: *mut u8 = core::ptr::null_mut();\n");
+    rust_u8_ptr_const("ARG_STATUS", 1);
+    rust_error_ptr_const("CONFIGURE_BAD_OPTION", -1);
+    rust_error_ptr_const("CONFIGURE_NUMBER_NEEDED", 1);
+    rust_error_ptr_const("CONFIGURE_TOO_LARGE", 2);
+    rust_error_ptr_const("CONFIGURE_TOO_MANY_PARAMS", 3);
+
+    l = opt.commands;
+    n = 0;
+    while (l)
+    {
+      if (!l->no_handler)
+      {
+        char name[256];
+        sprintf(name, "CMD_%s", l->name);
+        rust_i32_const(name, n);
+        n++;
+      }
+      l = l->next;
+    }
+  }
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_swi_support
+ Description:  Emit SWI handler aliases and SWI number constants.
+ Parameters:   none
+ Returns:      none
+ ******************************************************************/
+static void rust_swi_support(void)
+{
+  swi_list l;
+  char *prefix;
+  int swi;
+
+  if (!(opt.swi_handler || opt.swi_codesupplied))
+    return;
+
+  if (opt.swi_handler)
+    rust_signature(rust_alias_name(opt.swi_handler), "%error%",
+                   "int", "%regs%", "void *", NULL, NULL);
+
+  if (opt.swi_codesupplied)
+  {
+    l = opt.swi_names->next;
+    while (l)
+    {
+      if (l->handler)
+        rust_signature(rust_alias_name(l->handler), "%error%",
+                       "int", "%regs%", "void *", NULL, NULL);
+      l = l->next;
+    }
+  }
+
+  prefix = opt.swi_names->name;
+  swi = opt.swi_base;
+  {
+    char name[256];
+    sprintf(name, "%s_00", prefix);
+    rust_u32_const(name, swi);
+  }
+
+  l = opt.swi_names->next;
+  while (l)
+  {
+    char name[256];
+    char xname[256];
+    sprintf(name, "%s_%s", prefix, l->name);
+    sprintf(xname, "X%s_%s", prefix, l->name);
+    rust_u32_const(name, swi);
+    rust_u32_const(xname, swi + (1 << 17));
+    swi++;
+    l = l->next;
+  }
+
+  rust_error_ptr_const("ERROR_BAD_SWI", -1);
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_swi_decoder_support
+ Description:  Emit SWI decoder handler aliases.
+ Parameters:   none
+ Returns:      none
+ ******************************************************************/
+static void rust_swi_decoder_support(void)
+{
+  if (!opt.swi_decoder)
+    return;
+
+  if (opt.swi_decoder->handler)
+  {
+    rust_signature(rust_alias_name(opt.swi_decoder->name), "int",
+                   "const char *", "void *", NULL, NULL, NULL);
+    rust_signature(rust_alias_name(opt.swi_decoder->handler), "int",
+                   "int", "char *", "int", "int", "void *");
+  }
+  else
+  {
+    rust_signature_direct(rust_alias_name(opt.swi_decoder->name), "i32",
+                          "*mut i32", "*mut c_void", NULL, NULL, NULL);
+  }
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_event_support
+ Description:  Emit event entry symbols and handler aliases.
+ Parameters:   none
+ Returns:      none
+ ******************************************************************/
+static void rust_event_support(void)
+{
+  handler_list h = opt.events;
+
+  while (h)
+  {
+    rust_extern_symbol(h->name);
+    if (h->handler)
+      rust_signature(rust_alias_name(h->handler), "int",
+                     "%regs%", "void *", NULL, NULL, NULL);
+    h = h->next;
+  }
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_handler_support
+ Description:  Emit entry symbols and function aliases for handler lists.
+ Parameters:   head = handler list
+               returntype = internal CMunge return type
+               add_vector_consts = whether vector constants are needed
+               add_carry_const = whether VENEER_SETCARRY is needed
+               add_trap_args = whether vector trap parameters are needed
+ Returns:      none
+ ******************************************************************/
+static void rust_handler_support(handler_list head,
+                                 const char *returntype,
+                                 int add_vector_consts,
+                                 int add_carry_const,
+                                 int add_trap_args)
+{
+  handler_list h = head;
+  while (h)
+  {
+    rust_extern_symbol(h->name);
+    if (h->handler)
+    {
+      if (add_trap_args)
+      {
+        rust_signature(rust_alias_name(h->handler), returntype,
+                       "%regs%", "void *", "vectortrap_f", "void *", NULL);
+      }
+      else
+      {
+        rust_signature(rust_alias_name(h->handler), returntype,
+                       "%regs%", "void *", NULL, NULL, NULL);
+      }
+    }
+    h = h->next;
+  }
+
+  if (add_carry_const)
+    rust_error_ptr_const("VENEER_SETCARRY", 0);
+  if (add_vector_consts)
+  {
+    rust_i32_const("VECTOR_PASSON", 1);
+    rust_i32_const("VECTOR_CLAIM", 0);
+    fprintf(file, "#[inline]\n");
+    fprintf(file, "pub fn vector_error(err: *const KernelOSError) -> i32 {\n");
+    fprintf(file, "    err as isize as i32\n");
+    fprintf(file, "}\n");
+  }
+  if (add_trap_args)
+  {
+    fprintf(file, "pub type vectortrap_f = unsafe extern \"C\" fn(*mut KernelSwiRegs, *mut c_void) -> *mut KernelOSError;\n");
+    rust_error_ptr_const("VECTORTRAP_PASSON", 1);
+  }
+}
+
+/*************************************************** Gerph *********
+ Function:     rust_errors
+ Description:  Emit Rust declarations for embedded error blocks.
+ Parameters:   none
+ Returns:      none
+ ******************************************************************/
+static void rust_errors(void)
+{
+  int errnum;
+  error_list l;
+
+  if (!(opt.error_base || opt.errors))
+    return;
+
+  errnum = opt.error_base;
+  if (errnum)
+    rust_u32_const("ERROR_BASE", errnum);
+
+  l = opt.errors;
+  while (l)
+  {
+    if (l->number == 0)
+      errnum++;
+    rust_error_symbol(l->name);
+    l = l->next;
+  }
+}
+
+/*************************************************** Gerph *********
+ Function:     WriteRustHeader
+ Description:  Write a Rust module file containing Rust FFI declarations
+               derived from the CMHG input.
+ Parameters:   none
+ Returns:      none
+ ******************************************************************/
+void WriteRustHeader(void)
+{
+  if (!opt.x_rs)
+    return;
+
+  if (opt.oslib)
+    ErrorFatal("Rust header output does not yet support -zoslib or -zoslibpath");
+
+  file = file_write(opt.x_rs, remove_onfail);
+
+  if (file == NULL)
+    ErrorFatal("Couldn't create Rust header file: %s", opt.x_rs);
+
+  c_comment(file, "Generated by CMunge " Module_FullVersionAndDate "\n"
+                 "CMunge " Copyright_CMunge);
+  fprintf(file, "\n");
+
+  fprintf(file, "use core::ffi::c_void;\n\n");
+
+  fprintf(file, "#[repr(C)]\n");
+  fprintf(file, "pub struct KernelSwiRegs {\n");
+  fprintf(file, "    pub r: [i32; 10],\n");
+  fprintf(file, "}\n\n");
+
+  fprintf(file, "#[repr(C)]\n");
+  fprintf(file, "pub struct KernelOSError {\n");
+  fprintf(file, "    pub errnum: i32,\n");
+  fprintf(file, "    pub errmess: [u8; 252],\n");
+  fprintf(file, "}\n\n");
+
+  fprintf(file, "pub const CMUNGE_VERSION: i32 = %i;\n", Module_Version);
+  fprintf(file, "pub const CMHG_VERSION: i32 = 531;\n");
+  if (!opt.mode_errors)
+  {
+    rust_const_string("MODULE_TITLE", opt.title);
+    {
+      char *str = opt.help;
+      char help[512];
+      int pos = 0;
+      while (*str != '\0' && *str != '\t' && pos < (int)sizeof(help) - 1)
+      {
+        help[pos++] = *str++;
+      }
+      help[pos] = '\0';
+      rust_const_string("MODULE_HELP", help);
+    }
+    fprintf(file, "pub const MODULE_VERSION_STRING: &str = \"%d.%02d\";\n",
+            opt.version / 100, opt.version % 100);
+    fprintf(file, "pub const MODULE_VERSION_NUMBER: i32 = %d;\n", opt.version);
+    rust_const_string("MODULE_DATE", opt.date);
+    if (opt.mfile)
+      rust_const_string("MODULE_MESSAGES_FILE", opt.mfile);
+  }
+  fprintf(file, "\n");
+
+  if (opt.base)
+  {
+    fprintf(file, "unsafe extern \"C\" {\n");
+    fprintf(file, "    pub static Image__RO_Base: i32;\n");
+    fprintf(file, "}\n\n");
+  }
+
+  if (opt.init)
+    rust_signature(rust_alias_name(opt.init), "%error%",
+                   "const char *", "int", "void *", NULL, NULL);
+  if (opt.final)
+    rust_signature(rust_alias_name(opt.final), "%error%",
+                   "int", "int", "void *", NULL, NULL);
+  if (opt.service)
+    rust_signature(rust_alias_name(opt.service), "void",
+                   "int", "%regs%", "void *", NULL, NULL);
+  rust_command_support();
+  rust_swi_support();
+  rust_swi_decoder_support();
+  rust_event_support();
+  if (opt.irqs)
+    rust_handler_support(opt.irqs, "int", 0, 0, 0);
+  if (opt.generics)
+    rust_handler_support(opt.generics, "%error%", 0, 1, 0);
+  if (opt.vectors)
+    rust_handler_support(opt.vectors, "int", 1, 0, 0);
+  if (opt.vector_traps)
+    rust_handler_support(opt.vector_traps, "%error%", 0, 0, 1);
+  rust_errors();
+
+  file_close(file);
+}

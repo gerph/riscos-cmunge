@@ -24,7 +24,7 @@ FILES = \
 	str.h system.c system.h throwback.c \
 	throwback.h VersionNum writeexport.c writeexport.h \
 	writefile.c writefile.h writeheader.c writeheader.h \
-	writeheaderd.c writeheaderd.h
+	writeheaderd.c writeheaderd.h writerust.c writerust.h
 
 OBJS = \
   apcscli.o \
@@ -47,7 +47,8 @@ OBJS = \
   writeexport.o \
   writefile.o \
   writeheader.o \
-  writeheaderd.o
+  writeheaderd.o \
+  writerust.o
 
 .PHONY: all links cross_export cross_install tool_dir clean
 
@@ -73,6 +74,7 @@ test: $(COMPONENT)
 	mkdir -p ../testdata/o
 	mkdir -p ../testdata/h
 	mkdir -p ../testdata/hdr
+	mkdir -p ../testdata/rs
 	mkdir -p ../testdata/s
 	mkdir -p ../artifacts
 	perl ../testdata/test.pl --junitxml "${JUNITXML}" --show-command --show-output "$(shell pwd)/$(COMPONENT) ${EXTRA_ARGS}" ../testdata
@@ -196,3 +198,8 @@ writeheaderd.c: ../c/writeheaderd
 	ln -sf ../c/writeheaderd writeheaderd.c
 writeheaderd.h: ../h/writeheaderd
 	ln -sf ../h/writeheaderd writeheaderd.h
+writerust.o: writerust.c gfile.h error.h options.h comments.h copyright.h VersionNum
+writerust.c: ../c/writerust
+	ln -sf ../c/writerust writerust.c
+writerust.h: ../h/writerust
+	ln -sf ../h/writerust writerust.h

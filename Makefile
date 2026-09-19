@@ -23,6 +23,7 @@ OBJS       = \
         o.throwback     \
         o.writeheader   \
         o.writeheaderd  \
+        o.writerust     \
         o.writeexport   \
         o.writefile     \
         o.blank

@@ -16,6 +16,7 @@ Options:
   -xh <file>         Name a C SWI header file that CMunge will generate.
   -xd <file>         Name a D interface (.di) file that CMunge will
                      generate.
+  -xrs <file>        Name a Rust module file that CMunge will generate.
   -p                 Pre-process the file with pre-processor before parsing.
   -px                Extended pre-processing of all content from
                      pre-processor.

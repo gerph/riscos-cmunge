@@ -1,0 +1,10 @@
+/*
+ * Copyright (C) 2026 Robin Watts/Justin Fletcher
+ */
+
+#ifndef WRITERUST_H
+#define WRITERUST_H
+
+void WriteRustHeader(void);
+
+#endif

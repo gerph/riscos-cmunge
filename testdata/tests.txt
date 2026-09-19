@@ -67,6 +67,27 @@ Args: earlyinit 64
 Group: Examples
 Replace: expect/command-replacements
 
+Test: Big test Rust header output
+Command: $TOOL -throwback cmhg.$ARG1 -xrs rs/$ARG1-rs -p -DRobin=Genius -DNoBugsPlease -UJustin -I@.inc.
+Creates: rs/bigtest-rs
+Text:Matches: expect/examples/$ARG1-rs
+Text:Replace: expect/output-replacements
+Args: bigtest
+
+Test: Rust header extra pair coverage
+Command: $TOOL -throwback cmhg.$ARG1 -xrs rs/$ARG1-rs -zbase -p
+Creates: rs/rust-extra-pair-rs
+Text:Matches: expect/examples/$ARG1-rs
+Text:Replace: expect/output-replacements
+Args: rust-extra-pair
+
+Test: Rust header extra single decoder coverage
+Command: $TOOL -throwback cmhg.$ARG1 -xrs rs/$ARG1-rs -p
+Creates: rs/rust-extra-single-rs
+Text:Matches: expect/examples/$ARG1-rs
+Text:Replace: expect/output-replacements
+Args: rust-extra-single
+
 Test: Big test of many of the features
 Command: $TOOL -throwback cmhg.$ARG1 -s s/$ARG1 -o o.$ARG1 -p -d h/$ARG1 -DRobin=Genius -DNoBugsPlease -UJustin -I@.inc. -zbase -xhdr hdr/$ARG1 -xh h/$ARG1_swis
 Creates: h/bigtest h/bigtest_swis hdr/bigtest o/bigtest s/bigtest
@@ -107,6 +128,24 @@ Test: Only errors (64bit)
 Command: $TOOL -64bit -throwback cmhg.errors-only -zerrors -s s/errors-only-64 -p
 Creates: s/errors-only-64
 Expect: expect/examples/errors-only-64
+
+Test: Only errors Rust header output
+Command: $TOOL -64bit -throwback cmhg.errors-only -zerrors -xrs rs/errors-only-rs -p
+Creates: rs/errors-only-rs
+Text:Matches: expect/examples/errors-only-rs
+Text:Replace: expect/output-replacements
+
+
+Group: Option: Rust header unsupported combinations
+Replace: expect/command-replacements
+Expect: expect/examples/rust-zoslib-unsupported
+RC: 1
+
+Test: Rust header with -zoslib
+Command: $TOOL -throwback cmhg.bigtest -xrs rs/bigtest-rs -zoslib -p -DRobin=Genius -DNoBugsPlease -UJustin -I@.inc.
+
+Test: Rust header with -zoslibpath
+Command: $TOOL -throwback cmhg.bigtest -xrs rs/bigtest-rs -zoslibpath -p -DRobin=Genius -DNoBugsPlease -UJustin -I@.inc.
 
 
 

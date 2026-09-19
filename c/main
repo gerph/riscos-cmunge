@@ -97,6 +97,7 @@ int main(int argc, char *argv[]) {
   WriteFile();
   WriteHeader();
   WriteHeaderD();
+  WriteRustHeader();
   WriteExport_Hdr();
   WriteExport_H();
   AssembleFile();

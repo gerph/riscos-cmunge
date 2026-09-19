@@ -1,0 +1,8 @@
+title-string:           RustExtra
+help-string:            Rust_Extra 0.01
+date-string:            11 Jun 2026
+swi-chunk-base-number:  &45600
+swi-handler-code:       Mod_SWI
+swi-decoding-table:     RustExtra,One
+swi-decoding-code:      SWI_NameToNumber/SWI_NumberToName
+service-call-handler:   Service_Handler 1 2
